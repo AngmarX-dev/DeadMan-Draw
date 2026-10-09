@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private var reducedMotion = false
     private var soundEnabled = false
     private var hapticsEnabled = true
+    private var textScale = 1f
     private var trackedFinishedGame = false
     private val selectedHookIds = mutableSetOf<Int>()
     private var toneGenerator: ToneGenerator? = null
@@ -76,6 +77,7 @@ class MainActivity : Activity() {
         reducedMotion = prefs.getBoolean("reduced_motion", false)
         soundEnabled = prefs.getBoolean("sound", false)
         hapticsEnabled = prefs.getBoolean("haptics", true)
+        textScale = prefs.getFloat("text_scale", 1f).coerceIn(0.85f, 1.2f)
         applyTheme(themeIndex)
         window.statusBarColor = navy
         window.navigationBarColor = navy
@@ -91,7 +93,7 @@ class MainActivity : Activity() {
             AlertDialog.Builder(this)
                 .setTitle("Resume your voyage?")
                 .setMessage("An unfinished game was saved. Continue it or start a new voyage.")
-                .setPositiveButton("RESUME") { _, _ -> renderGame() }
+                .setPositiveButton("RESUME") { _, _ -> if (saved.players.firstOrNull()?.trait == null) chooseTrait() else renderGame() }
                 .setNegativeButton("NEW VOYAGE") { _, _ ->
                     state = null
                     deleteSavedGame()
@@ -151,7 +153,8 @@ class MainActivity : Activity() {
         }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(18), dp(20), dp(26))
+            val sidePadding = if (resources.configuration.screenWidthDp >= 600) dp(56) else dp(20)
+            setPadding(sidePadding, dp(18), sidePadding, dp(26))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(navy, panelColor, navy)
@@ -163,7 +166,7 @@ class MainActivity : Activity() {
         setContentView(scroll)
         val heading = TextView(this).apply {
             text = title
-            textSize = 27f
+            textSize = 27f * textScale
             gravity = Gravity.CENTER
             typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
             setTextColor(gold)
@@ -185,7 +188,7 @@ class MainActivity : Activity() {
 
     private fun label(text: String, size: Float = 16f): TextView = TextView(this).apply {
         this.text = text
-        textSize = size
+        textSize = size * textScale
         setTextColor(Color.WHITE)
         setPadding(dp(4), dp(7), dp(4), dp(7))
     }
@@ -208,7 +211,7 @@ class MainActivity : Activity() {
         val control = Button(this).apply {
             this.text = text
             contentDescription = text.replace(Regex("[^\\p{L}\\p{N} ]"), "").trim()
-            textSize = 15f
+            textSize = 15f * textScale
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setTextColor(Color.rgb(25, 32, 34))
             background = roundedDrawable(gold)
@@ -246,7 +249,7 @@ class MainActivity : Activity() {
             imeOptions = EditorInfo.IME_ACTION_DONE
             setText(captainName)
             hint = "Enter your name"
-            textSize = 16f
+            textSize = 16f * textScale
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             background = roundedDrawable(panelColor, mutedGold, 1)
@@ -262,7 +265,7 @@ class MainActivity : Activity() {
             setSingleLine(true)
             setText(prefs.getString("rival_names", rivalNames.joinToString(", ")).orEmpty())
             hint = "Blackbeard, Redbeard, Sea Wolf..."
-            textSize = 15f
+            textSize = 15f * textScale
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
             background = roundedDrawable(panelColor, mutedGold, 1)
@@ -321,6 +324,25 @@ class MainActivity : Activity() {
         root.addView(sound)
         root.addView(haptics)
 
+        val textScaleStops = listOf(0.85f, 0.95f, 1.0f, 1.1f, 1.2f)
+        val textScaleLabels = listOf("85%", "95%", "100%", "110%", "120%")
+        val selectedScale = textScaleStops.indexOf(textScale).takeIf { it >= 0 } ?: 2
+        val textScaleLabel = panel("TEXT SIZE: ${textScaleLabels[selectedScale]}", 14f)
+        root.addView(textScaleLabel)
+        val textScaleSeek = SeekBar(this).apply {
+            max = textScaleStops.lastIndex
+            progress = selectedScale
+            contentDescription = "Text size percentage"
+        }
+        textScaleSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                textScaleLabel.text = "TEXT SIZE: ${textScaleLabels[progress]}"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
+        root.addView(textScaleSeek)
+
         button("⚓  START NEW VOYAGE") {
             captainName = nameInput.text.toString().trim().ifBlank { "Captain" }.take(24)
             rivalNames = rivalNamesInput.text.toString().split(",").map { it.trim().take(24) }
@@ -333,12 +355,14 @@ class MainActivity : Activity() {
             reducedMotion = reduced.isChecked
             soundEnabled = sound.isChecked
             hapticsEnabled = haptics.isChecked
+            textScale = textScaleStops[textScaleSeek.progress]
             prefs.edit()
                 .putBoolean("chest_key_bonus", chestKey.isChecked)
                 .putBoolean("kraken_pressure", kraken.isChecked)
                 .putBoolean("reduced_motion", reducedMotion)
                 .putBoolean("sound", soundEnabled)
                 .putBoolean("haptics", hapticsEnabled)
+                .putFloat("text_scale", textScale)
                 .putString("rival_names", rivalNames.joinToString(", "))
                 .apply()
             startNewGame(lastPlayerCount, lastDifficulty, lastRules, lastPassAndPlay)
@@ -445,7 +469,7 @@ class MainActivity : Activity() {
                 ).apply { topMargin = dp(4) })
                 tile.addView(TextView(this).apply {
                     text = card.type.displayName.uppercase()
-                    textSize = 11f
+                    textSize = 11f * textScale
                     gravity = Gravity.CENTER
                     typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
                     setTextColor(Color.WHITE)
@@ -453,7 +477,7 @@ class MainActivity : Activity() {
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
                 tile.addView(TextView(this).apply {
                     text = "${card.value} pts${if (protected) "  •  SHIELDED" else ""}"
-                    textSize = if (protected) 9f else 11f
+                    textSize = (if (protected) 9f else 11f) * textScale
                     gravity = Gravity.CENTER
                     typeface = Typeface.DEFAULT_BOLD
                     setTextColor(if (protected) Color.rgb(167, 255, 222) else Color.WHITE)
@@ -706,7 +730,7 @@ class MainActivity : Activity() {
         root.addView(label("The highest banked value of each type counts. Golden Scales add five points for owning a Mermaid. Chest + Key may grant a Burn Deck bonus, and Treasure Hunter triples it."))
         root.addView(panel("6. PLAY TOGETHER", 17f))
         root.addView(label("Choose local pass-and-play in the setup screen for multiple people on one device, or leave it off to face AI pirates."))
-        button("BACK TO PORT") { showSetup() }
+        button("BACK") { if (state != null && state?.finished == false) renderGame() else showSetup() }
     }
 
     private fun showCardGlossary() {
@@ -768,7 +792,7 @@ class MainActivity : Activity() {
         trackedFinishedGame = true
         val prefs = getSharedPreferences("dead_man_draw_prefs", MODE_PRIVATE)
         val matches = prefs.getInt("matches_played", 0) + 1
-        val winner = game.players.maxByOrNull { it.score }
+        val winner = game.players.sortedWith(compareByDescending<PlayerData> { it.score }.thenByDescending { it.bank.size }).firstOrNull()
         val userScore = game.players.firstOrNull()?.score ?: 0
         prefs.edit()
             .putInt("matches_played", matches)
@@ -838,6 +862,7 @@ class MainActivity : Activity() {
 
     private fun saveSetupDefaults() {
         getSharedPreferences("dead_man_draw_prefs", MODE_PRIVATE).edit()
+            .putFloat("text_scale", textScale)
             .putInt("theme", themeIndex)
             .putBoolean("reduced_motion", reducedMotion)
             .putBoolean("sound", soundEnabled)

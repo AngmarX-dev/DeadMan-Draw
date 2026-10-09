@@ -44,7 +44,7 @@ The current voyage is stored in the app's private files while a game is in progr
 ### Install the debug APK
 
 1. Open the [latest successful Android CI run](https://github.com/AngmarX-dev/DeadMan-Draw/actions/workflows/android-ci.yml).
-2. Open a successful run and download the `dead-man-draw-debug-apk` artifact.
+2. Open a successful run and download the `dead-man-draw-apks` artifact.
 3. Extract the downloaded ZIP to find `app-debug.apk`.
 4. Install it on your Android device. You may need to allow installation from the file manager that opens the APK.
 
@@ -63,7 +63,7 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-The workflow runs the tests and packages the debug APK plus an unsigned release APK. The debug APK is intended for easy testing. The optimized release APK is currently **unsigned** until a production signing key is configured; do not treat it as a store-ready package.
+The workflow runs the tests and packages the debug APK plus an optimized release APK. The debug APK is intended for easy testing. Configure these repository Actions secrets to produce a signed release APK: `ANDROID_KEYSTORE_BASE64` (base64-encoded keystore), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Without them, the optimized release APK remains **unsigned** and is not store-ready.
 
 See [GitHub Actions](https://github.com/AngmarX-dev/DeadMan-Draw/actions) for build logs and artifacts, or [GitHub Releases](https://github.com/AngmarX-dev/DeadMan-Draw/releases) for tagged packages.
 
@@ -80,7 +80,7 @@ See [GitHub Actions](https://github.com/AngmarX-dev/DeadMan-Draw/actions) for bu
 Run these commands from the repository root:
 
 ```bash
-gradle --no-daemon clean testDebugUnitTest assembleDebug
+gradle --no-daemon clean testDebugUnitTest assembleDebug assembleRelease
 ```
 
 The APK is written to:
@@ -135,14 +135,14 @@ The completed items below are implemented in the current code. The remaining ite
 - [x] Support landscape orientation, scrollable layouts and scalable text.
 - [x] Add accessibility descriptions and larger tap targets.
 - [x] Add captain/rival names, player icons and selectable table themes.
-- [ ] Add dedicated multi-pane tablet layouts and a user-facing text-size control.
+- [x] Add a user-facing text-size control and wider-screen spacing.\n- [ ] Add dedicated multi-pane tablet layouts.
 
 ### Quality and publishing
 - [x] Expand automated tests for busting, collecting, scoring, special cards, traits, AI and save-state serialization.
 - [x] Add deterministic seeded scenarios for debugging.
 - [x] Add local pass-and-play support.
 - [x] Add a version-tagged release workflow and installation instructions.
-- [ ] Configure a production signing key and publish an optimized, signed release APK.
+- [ ] Add the production signing secrets and publish a verified optimized, signed release APK.
 - [ ] Add secure online multiplayer, including an authoritative backend, lobby/match lifecycle, reconnection and server-side validation.
 
 ## 🤝 Contributing
