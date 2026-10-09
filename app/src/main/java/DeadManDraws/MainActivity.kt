@@ -54,7 +54,7 @@ class MainActivity : Activity() {
 
     private fun base(title: String): LinearLayout {
         val scroll = ScrollView(this).apply {
-            fillViewport = true
+            isFillViewport = true
             setBackgroundColor(navy)
         }
         root = LinearLayout(this).apply {
