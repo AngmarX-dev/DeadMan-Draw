@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "DeadManDraws"
+    namespace = "com.angmarx.deadmandraw"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "DeadManDraws"
+        applicationId = "com.angmarx.deadmandraw"
         minSdk = 23
         targetSdk = 35
         versionCode = 1
