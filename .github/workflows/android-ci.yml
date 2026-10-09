@@ -10,11 +10,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build and test Kotlin Android app
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -24,17 +28,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Set up Gradle
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+      - name: Verify toolchain
+        run: |
+          java -version
+          gradle --version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -n "$ANDROID_HOME"
 
-      - name: Run unit tests
-        run: gradle --no-daemon testDebugUnitTest
+      - name: Run unit tests and build debug APK
+        run: gradle --no-daemon --stacktrace clean testDebugUnitTest assembleDebug
 
       - name: Upload debug APK
         if: success()
