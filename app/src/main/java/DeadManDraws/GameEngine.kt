@@ -119,8 +119,16 @@ class GameEngine(private val random: Random = Random.Default) {
             return null
         }
         if (state.drawDeck.isEmpty()) {
-            if (state.board.isEmpty()) finish(state)
-            else state.message = "The Draw Deck is empty. Collect the remaining board to finish."
+            if (state.pendingForcedDraws > 0) {
+                val stranded = state.pendingForcedDraws
+                state.pendingForcedDraws = 0
+                state.message = "The Draw Deck is empty; ${stranded} forced draw(s) cannot be completed. Collect the board to finish."
+                addLog(state, state.message)
+            } else if (state.board.isEmpty()) {
+                finish(state)
+            } else {
+                state.message = "The Draw Deck is empty. Collect the remaining board to finish."
+            }
             return null
         }
 
@@ -187,9 +195,15 @@ class GameEngine(private val random: Random = Random.Default) {
         addLog(state, state.message)
 
         if (card.type == CardType.SWORD) applyParryIfNeeded(state, player)
-        if (!state.finished && state.drawDeck.isEmpty() && state.pendingEffect == null && state.board.isEmpty()) finish(state)
-        else if (state.drawDeck.isEmpty() && state.pendingEffect == null) {
-            state.message += " Draw Deck exhausted: collect the board to end the game."
+        if (state.drawDeck.isEmpty() && state.pendingEffect == null) {
+            if (state.pendingForcedDraws > 0) {
+                val stranded = state.pendingForcedDraws
+                state.pendingForcedDraws = 0
+                state.message += " Draw Deck exhausted; ${stranded} forced draw(s) cannot be made."
+                addLog(state, state.message)
+            }
+            if (!state.finished && state.board.isEmpty()) finish(state)
+            else if (!state.finished) state.message += " Collect the remaining board to finish."
         }
         return card
     }
@@ -484,7 +498,16 @@ class GameEngine(private val random: Random = Random.Default) {
             player.score = scoreFor(player)
         }
         val winner = state.players.sortedWith(compareByDescending<PlayerData> { it.score }.thenByDescending { it.bank.size }).firstOrNull()
-        state.message = "Game over! Winner: ${winner?.name ?: "nobody"}."
+        val gameOverMessage = "Game over! Winner: ${winner?.name ?: "nobody"}."
+        val previousMessage = state.message
+        val keepPreviousAction = previousMessage.contains("Bust!", ignoreCase = true) ||
+            previousMessage.contains("Davy Jones", ignoreCase = true) ||
+            previousMessage.contains("banks", ignoreCase = true) ||
+            previousMessage.contains("collect", ignoreCase = true) ||
+            previousMessage.contains("Draw Deck exhausted", ignoreCase = true)
+        state.message = if (keepPreviousAction && !previousMessage.contains("Game over!", ignoreCase = true)) {
+            "$previousMessage $gameOverMessage"
+        } else gameOverMessage
         addLog(state, state.message)
     }
 
@@ -548,21 +571,29 @@ class GameEngine(private val random: Random = Random.Default) {
     private fun resolveAiEffect(state: GameState) {
         val effect = state.pendingEffect ?: return
         val active = state.players[state.currentPlayer]
-        when (effect.cardType) {
+        val resolved = when (effect.cardType) {
             CardType.CANNON -> {
                 val target = state.players.filter { it.id != active.id && it.bank.isNotEmpty() }
                     .maxByOrNull { it.bank.size }
-                if (target == null) skipPendingEffect(state)
-                else if (target.trait == TraitType.MISFIRE) resolveCannon(state, target.id)
-                else {
+                if (target == null) {
+                    skipPendingEffect(state)
+                } else if (target.trait == TraitType.MISFIRE) {
+                    resolveCannon(state, target.id)
+                } else {
                     val type = target.bank.groupingBy { it.type }.eachCount().maxByOrNull { it.value }?.key
                     if (type == null) skipPendingEffect(state) else resolveCannon(state, target.id, type)
                 }
             }
             CardType.HOOK -> {
                 val allowed = if (active.trait == TraitType.CAPTAINS_HOOK) 2 else 1
-                val ids = active.bank.filter { bankCard -> state.board.none { it.type == bankCard.type } }
-                    .sortedByDescending { it.value }.take(allowed).map { it.id }
+                val ids = active.bank
+                    .filter { bankCard -> state.board.none { it.type == bankCard.type } }
+                    .groupBy { it.type }
+                    .values
+                    .mapNotNull { sameType -> sameType.maxByOrNull { it.value } }
+                    .sortedByDescending { it.value }
+                    .take(allowed)
+                    .map { it.id }
                 resolveHook(state, ids)
             }
             CardType.MAP -> {
@@ -574,16 +605,24 @@ class GameEngine(private val random: Random = Random.Default) {
             CardType.SWORD -> {
                 val target = state.players.filter { it.id != active.id && it.bank.isNotEmpty() }
                     .maxByOrNull { it.bank.size }
-                val stealable = target?.bank?.filter { active.trait == TraitType.SWORDSMAN || active.bank.none { owned -> owned.type == it.type } }
-                    ?.maxByOrNull { it.value }
+                val stealable = target?.bank?.filter {
+                    active.trait == TraitType.SWORDSMAN || active.bank.none { owned -> owned.type == it.type }
+                }?.maxByOrNull { it.value }
                 if (target == null || stealable == null) skipPendingEffect(state)
                 else resolveSword(state, target.id, stealable.id)
             }
             else -> skipPendingEffect(state)
         }
+        if (!resolved && state.pendingEffect != null) skipPendingEffect(state)
     }
 
     private fun finishIfNoCardsRemain(state: GameState) {
+        if (!state.finished && state.drawDeck.isEmpty() && state.pendingForcedDraws > 0 && state.pendingEffect == null) {
+            val stranded = state.pendingForcedDraws
+            state.pendingForcedDraws = 0
+            state.message += " Draw Deck exhausted; ${stranded} forced draw(s) cannot be made."
+            addLog(state, state.message)
+        }
         if (!state.finished && state.drawDeck.isEmpty() && state.board.isEmpty() && state.pendingEffect == null) finish(state)
     }
 

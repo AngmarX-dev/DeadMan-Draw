@@ -325,7 +325,10 @@ class GameEngineTest {
 
     @Test fun beastmasterKrakenRequiresFourForcedDraws() {
         val engine = GameEngine(Random(25))
-        val state = fixture(draw = listOf(card(1, CardType.KRAKEN)))
+        val state = fixture(draw = listOf(
+            card(1, CardType.KRAKEN), card(2, CardType.ANCHOR), card(3, CardType.CHEST),
+            card(4, CardType.KEY), card(5, CardType.MAP)
+        ))
         state.players[0].trait = TraitType.BEASTMASTER
         engine.draw(state)
         assertEquals(4, state.pendingForcedDraws)
@@ -387,5 +390,15 @@ class GameEngineTest {
         assertTrue(restored.passAndPlay)
         assertFalse(restored.rules.krakenPressureEnabled)
         assertEquals(PendingCardEffect(CardType.HOOK, 0), restored.pendingEffect)
+    }
+
+    @Test fun lastKrakenCannotSoftLockTheGameWhenForcedDrawsRunOutOfDeck() {
+        val engine = GameEngine(Random(31))
+        val state = fixture(draw = listOf(card(1, CardType.KRAKEN)))
+        engine.draw(state)
+        assertEquals(0, state.pendingForcedDraws)
+        assertTrue(state.message.contains("Draw Deck exhausted"))
+        assertTrue(engine.collect(state))
+        assertTrue(state.finished)
     }
 }
