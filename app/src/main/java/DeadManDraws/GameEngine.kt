@@ -76,6 +76,7 @@ class GameEngine(private val random: Random = Random.Default) {
         if (state.finished || state.drawDeck.isEmpty()) { finish(state); return null }
         val player = state.players[state.currentPlayer]
         val card = state.drawDeck.removeAt(0)
+        if (state.pendingForcedDraws > 0) state.pendingForcedDraws--
         if (player.trait == TraitType.CASANOVA && card.type == CardType.MERMAID) {
             player.bank += card
             state.message = "${player.name} draws a Mermaid and banks it immediately."
@@ -101,7 +102,8 @@ class GameEngine(private val random: Random = Random.Default) {
         when (card.type) {
             CardType.ANCHOR -> state.message += " Anchor: previous board cards are protected."
             CardType.KRAKEN -> {
-                state.pendingForcedDraws = if (player.trait == TraitType.BEASTMASTER) 4 else if (player.trait == TraitType.FISHERMAN) 0 else 2
+                val forced = if (player.trait == TraitType.BEASTMASTER) 4 else if (player.trait == TraitType.FISHERMAN) 0 else 2
+                state.pendingForcedDraws = maxOf(state.pendingForcedDraws, forced)
                 if (state.pendingForcedDraws > 0) state.message += " Must draw ${state.pendingForcedDraws} more."
             }
             CardType.ORACLE -> {
@@ -125,13 +127,16 @@ class GameEngine(private val random: Random = Random.Default) {
             return
         }
         val player = state.players[state.currentPlayer]
+        val boardCount = state.board.size
+        val boardHasChestAndKey = state.board.any { it.type == CardType.CHEST } &&
+            state.board.any { it.type == CardType.KEY }
         player.bank += state.board
         state.board.clear()
         if (player.trait == TraitType.TREASURE_HUNTER &&
             player.bank.any { it.type == CardType.CHEST } && player.bank.any { it.type == CardType.KEY }) {
-            repeat(minOf(state.burnDeck.size, 3)) { player.bank += state.burnDeck.removeAt(0) }
-        } else if (state.board.any { it.type == CardType.CHEST } && state.board.any { it.type == CardType.KEY }) {
-            repeat(minOf(state.burnDeck.size, state.board.size)) { player.bank += state.burnDeck.removeAt(0) }
+            repeat(minOf(state.burnDeck.size, boardCount * 3)) { player.bank += state.burnDeck.removeAt(0) }
+        } else if (boardHasChestAndKey) {
+            repeat(minOf(state.burnDeck.size, boardCount)) { player.bank += state.burnDeck.removeAt(0) }
         }
         state.message = "${player.name} banks their cards."
         nextPlayer(state)
