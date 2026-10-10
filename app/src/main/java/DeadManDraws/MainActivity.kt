@@ -413,7 +413,7 @@ class MainActivity : Activity() {
             copy.addView(label(trait.description, 13f))
             choice.addView(copy, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             choice.setOnClickListener {
-                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                if (hapticsEnabled) choice.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 engine.setTrait(game, 0, trait)
                 if (trait == TraitType.DAVY_JONES_LOCKER) chooseDavyJonesTarget(game) else renderGame()
             }
