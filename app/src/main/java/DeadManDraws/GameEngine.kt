@@ -511,6 +511,47 @@ class GameEngine(private val random: Random = Random.Default) {
         addLog(state, state.message)
     }
 
+    /**
+     * Performs exactly one visible AI action. The Activity schedules repeated calls with a
+     * delay between them so draws, special-card effects and collections are observable.
+     * The returned draw count is kept for the current AI turn and reset when the turn ends.
+     */
+    fun playAiStep(state: GameState, drawsThisTurn: Int): Int {
+        if (state.finished || state.passAndPlay || state.currentPlayer == 0) return 0
+
+        val turnOwner = state.currentPlayer
+        val player = state.players[turnOwner]
+        if (player.trait == null) {
+            setTrait(state, player.id, TraitType.entries[random.nextInt(TraitType.entries.size)])
+        }
+
+        var draws = drawsThisTurn
+        if (state.pendingEffect != null) {
+            resolveAiEffect(state)
+            return if (state.currentPlayer != turnOwner || state.finished) 0 else draws
+        }
+
+        if (state.pendingForcedDraws > 0 || draws == 0) {
+            draw(state)
+            draws++
+            return if (state.currentPlayer != turnOwner || state.finished) 0 else draws
+        }
+
+        if (state.drawDeck.isEmpty()) {
+            if (state.board.isNotEmpty()) collect(state)
+            return 0
+        }
+
+        if (shouldAiCollect(state, draws)) {
+            collect(state)
+            return 0
+        }
+
+        draw(state)
+        draws++
+        return if (state.currentPlayer != turnOwner || state.finished) 0 else draws
+    }
+
     fun playAiTurnsUntilHuman(state: GameState) {
         var safety = 0
         while (!state.finished && !state.passAndPlay && state.currentPlayer != 0 && safety++ < 200) {
