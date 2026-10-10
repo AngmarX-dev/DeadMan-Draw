@@ -25,6 +25,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -390,10 +391,35 @@ class MainActivity : Activity() {
         base("CHOOSE YOUR TRAIT")
         root.addView(label("${game.players[0].name}, choose your captain's ability for this voyage.", 16f))
         TraitType.entries.shuffled().take(2).forEach { trait ->
-            button("✦  ${trait.displayName}\n${trait.description}") {
+            val choice = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = roundedDrawable(panelColor, gold, 1)
+                setPadding(dp(10), dp(10), dp(12), dp(10))
+                isClickable = true
+                isFocusable = true
+                contentDescription = "Choose ${trait.displayName}. ${trait.description}"
+            }
+            val artId = resources.getIdentifier(traitDrawableName(trait), "drawable", packageName)
+            if (artId != 0) {
+                choice.addView(ImageView(this).apply {
+                    setImageResource(artId)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = "${trait.displayName} trait illustration"
+                }, LinearLayout.LayoutParams(dp(86), dp(104)).apply { marginEnd = dp(12) })
+            }
+            val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            copy.addView(label("✦  ${trait.displayName}", 17f))
+            copy.addView(label(trait.description, 13f))
+            choice.addView(copy, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            choice.setOnClickListener {
+                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 engine.setTrait(game, 0, trait)
                 if (trait == TraitType.DAVY_JONES_LOCKER) chooseDavyJonesTarget(game) else renderGame()
             }
+            root.addView(choice, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
         }
         button("📚  READ ALL TRAITS") {
             base("PIRATE TRAIT GUIDE")
@@ -438,7 +464,33 @@ class MainActivity : Activity() {
         }
         feedbackForMessage(game.message)
 
-        root.addView(label("DRAW DECK  ${game.drawDeck.size}     •     BURN DECK  ${game.burnDeck.size}", 13f))
+        val deckRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun addDeckIndicator(drawableName: String, title: String, count: Int, description: String) {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = roundedDrawable(panelColor, mutedGold, 1)
+                setPadding(dp(8), dp(7), dp(8), dp(7))
+                contentDescription = "$description: $count cards"
+            }
+            val imageId = resources.getIdentifier(drawableName, "drawable", packageName)
+            if (imageId != 0) {
+                card.addView(ImageView(this).apply {
+                    setImageResource(imageId)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = description
+                }, LinearLayout.LayoutParams(dp(62), dp(70)))
+            }
+            card.addView(label("$title  •  $count", 13f).apply { gravity = Gravity.CENTER })
+            deckRow.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(8)
+            })
+        }
+        addDeckIndicator("backcart", "DRAW DECK", game.drawDeck.size, "Draw Deck")
+        addDeckIndicator("backcartburn", "BURN DECK", game.burnDeck.size, "Burn Deck")
+        root.addView(deckRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(8) })
         val active = game.players[game.currentPlayer]
         root.addView(panel("⚑  TURN ${game.turnNumber}: ${active.name}", 18f))
         root.addView(label("Current trait: ${active.trait?.displayName ?: "None"}", 14f))
@@ -464,9 +516,20 @@ class MainActivity : Activity() {
                     translationY = if (reducedMotion) 0f else dp(14).toFloat()
                     rotation = if (reducedMotion) 0f else if (index % 2 == 0) -4f else 4f
                 }
-                tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(66)
-                ).apply { topMargin = dp(4) })
+                val cardArtId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
+                if (cardArtId != 0) {
+                    tile.addView(ImageView(this).apply {
+                        setImageResource(cardArtId)
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        contentDescription = "${card.type.displayName} card artwork"
+                    }, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(70)
+                    ).apply { topMargin = dp(4) })
+                } else {
+                    tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(70)
+                    ).apply { topMargin = dp(4) })
+                }
                 tile.addView(TextView(this).apply {
                     text = card.type.displayName.uppercase()
                     textSize = 11f * textScale
@@ -819,6 +882,29 @@ class MainActivity : Activity() {
                 // Sound is an optional enhancement; unsupported audio should not interrupt play.
             }
         }
+    }
+
+    private fun cardDrawableName(type: CardType): String = when (type) {
+        CardType.ANCHOR -> "anchor"
+        CardType.CANNON -> "cannon"
+        CardType.CHEST -> "chest"
+        CardType.HOOK -> "hook"
+        CardType.KEY -> "key"
+        CardType.KRAKEN -> "kraken"
+        CardType.MAP -> "map"
+        CardType.MERMAID -> "mermaid"
+        CardType.ORACLE -> "oracle"
+        CardType.SWORD -> "sword"
+    }
+
+    private fun traitDrawableName(trait: TraitType): String = when (trait) {
+        TraitType.CAPTAINS_HOOK -> "captain_s_hook"
+        TraitType.DAVY_JONES_LOCKER -> "davy_jones_locker"
+        TraitType.GOLDEN_SCALES -> "golden_scales"
+        TraitType.MASTER_GUNNER -> "master_gunner"
+        TraitType.SAFE_HARBOR -> "safe_harbor"
+        TraitType.TREASURE_HUNTER -> "treasure_hunter"
+        else -> trait.name.lowercase()
     }
 
     private fun cardColor(type: CardType): Int = when (type) {

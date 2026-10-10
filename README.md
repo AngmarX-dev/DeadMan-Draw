@@ -26,7 +26,8 @@ Draw cards to grow the shared board. Each type normally appears only once on the
 
 ### Visual design and accessibility
 
-- **Custom vector card art** drawn with Android Canvas, with distinct motifs for the ten card types.
+- **Original card illustrations from `Images.rar`** are now used on the board for all ten card types, with a vector fallback if an image resource is missing.
+- **Trait artwork** from the archive appears in the trait-selection cards, and the Draw/Burn Deck indicators use the supplied card-back images.
 - **Card-specific animations:** Cannon recoil, Kraken pulse, Sword movement, Map turn and Oracle glow, plus card-deal animations.
 - **Animated screen transitions and controls**, bust feedback and a victory confetti celebration.
 - **Three table themes:** Deep Ocean, Black Pearl and Tropical Reef.
@@ -34,6 +35,10 @@ Draw cards to grow the shared board. Each type normally appears only once on the
 - **Shield indicators, named cards and content descriptions** so status is not conveyed by color alone.
 - **Scrollable card board and large tap targets**, with portrait and landscape support.
 - **First-run guide, card glossary, trait descriptions, turn log, end-game score breakdown and match statistics.**
+
+### Imported image assets
+
+The `Images.rar` archive is retained at the repository root. Its original image files are extracted to `app/src/main/assets/images/Images/`; Android-compatible copies are also generated in `app/src/main/res/drawable-nodpi/` with valid lowercase resource names. The game UI loads the card and trait illustrations directly from these Android resources. Unity `.meta` import descriptors are not copied into the Android assets folder.
 
 ### Save and resume
 
