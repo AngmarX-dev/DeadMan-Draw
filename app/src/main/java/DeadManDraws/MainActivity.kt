@@ -81,6 +81,12 @@ class MainActivity : Activity() {
     private var selectedPlayerCardsRow: LinearLayout? = null
     private var ownHandTitle: TextView? = null
     private var ownHandCardsRow: LinearLayout? = null
+    private var drawDeckControl: LinearLayout? = null
+    private var burnDeckControl: LinearLayout? = null
+    private var drawDeckCountLabel: TextView? = null
+    private var burnDeckCountLabel: TextView? = null
+    private var drawAnimationRunning = false
+    private var landscapeScreenRoot: LinearLayout? = null
 
     private var navy = Color.rgb(13, 27, 35)
     private var panelColor = Color.rgb(24, 43, 52)
@@ -295,6 +301,73 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
+        val deckDock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = roundedDrawable(panelColor, mutedGold, 1)
+            setPadding(dp(5), dp(3), dp(5), dp(2))
+        }
+        val deckRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+        }
+        fun createDeckPile(drawableName: String, title: String, description: String, isDrawPile: Boolean): LinearLayout {
+            val pile = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                gravity = Gravity.CENTER
+                background = roundedDrawable(navy, mutedGold, 1)
+                setPadding(dp(5), dp(2), dp(5), dp(2))
+                isClickable = true
+                isFocusable = true
+                contentDescription = description
+            }
+            val imageId = resources.getIdentifier(drawableName, "drawable", packageName)
+            if (imageId != 0) {
+                pile.addView(ImageView(this).apply {
+                    setImageResource(imageId)
+                    setColorFilter(cardBackColors[selectedCardBack])
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = description
+                }, LinearLayout.LayoutParams(dp(46), dp(62)).apply { marginEnd = dp(7) })
+            }
+            val info = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            info.addView(label(title, 13f).apply {
+                setTextColor(gold)
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            val counter = label("۰", 17f).apply {
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            info.addView(counter)
+            pile.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (isDrawPile) {
+                drawDeckCountLabel = counter
+                pile.setOnClickListener { onDrawDeckTapped(game) }
+                pile.setOnLongClickListener { onDrawDeckLongPressed(game) }
+            } else {
+                burnDeckCountLabel = counter
+                pile.setOnClickListener { onBurnDeckTapped(game) }
+            }
+            deckRow.addView(pile, LinearLayout.LayoutParams(0, dp(70), 1f).apply { marginEnd = dp(5) })
+            return pile
+        }
+        drawDeckControl = createDeckPile("backcart", "دستهٔ کارت", "لمس: برداشتن کارت؛ نگه‌داشتن: جمع‌کردن گنج", true)
+        burnDeckControl = createDeckPile("backcartburn", "کارت‌های سوخته", "برای بازیابی نقشه، دستهٔ سوخته را لمس کنید", false)
+        deckDock.addView(deckRow)
+        deckDock.addView(label("لمس دستهٔ کارت: برداشتن کارت  •  نگه‌داشتن: جمع‌کردن گنج", 10f).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 0)
+            setTextColor(Color.LTGRAY)
+        })
+        mainColumn.addView(deckDock, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(96)
+        ).apply { topMargin = dp(3) })
+
         val handDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -384,6 +457,8 @@ class MainActivity : Activity() {
             screenRoot.animate().alpha(1f).translationY(0f).setDuration(180)
                 .setInterpolator(DecelerateInterpolator()).start()
         }
+        landscapeScreenRoot = screenRoot
+        refreshDeckDock(game)
         refreshOwnHand(game)
         refreshPlayerSidebar(game)
     }
@@ -437,14 +512,37 @@ class MainActivity : Activity() {
     }
 
     private fun refreshOwnHand(game: GameState) {
-        val player = game.players.firstOrNull() ?: return
-        ownHandTitle?.text = "کارت‌های تو  •  ${player.bank.size.toPersianDigits()}"
+        // In solo mode always show the human captain's bank, even while a robot is taking its turn.
+        // In pass-and-play, the bottom dock follows the person whose turn is active.
+        val player = if (game.passAndPlay) game.players.getOrNull(game.currentPlayer) else game.players.firstOrNull()
+        if (player == null) return
+        val hookPending = game.pendingEffect?.cardType == CardType.HOOK &&
+            game.pendingEffect?.playerIndex == player.id
+        ownHandTitle?.text = if (hookPending) {
+            "قلاب: کارت انتخاب کن • عنوان را نگه‌دار (${selectedHookIds.size})"
+        } else {
+            "کارت‌های ${player.name} • ${player.bank.size.toPersianDigits()}"
+        }
+        ownHandTitle?.setOnLongClickListener {
+            if (hookPending) applySelectedHookCards(game) else false
+        }
         val row = ownHandCardsRow ?: return
         row.removeAllViews()
         if (player.bank.isEmpty()) {
             row.addView(label("هنوز کارتی ذخیره نکرده‌ای؛ پس از جمع‌کردن گنج، کارت‌ها اینجا می‌مانند.", 12f))
         } else {
-            player.bank.forEach { row.addView(makeCardTile(it, compact = false)) }
+            player.bank.forEach { card ->
+                val tile = makeCardTile(card, compact = false)
+                if (hookPending) {
+                    val selected = card.id in selectedHookIds
+                    tile.background = roundedDrawable(if (selected) mutedGold else cardColor(card.type),
+                        if (selected) Color.rgb(114, 229, 198) else gold, if (selected) 3 else 1)
+                    tile.isClickable = true
+                    tile.isFocusable = true
+                    tile.setOnClickListener { onBankCardTapped(game, player.id, card) }
+                }
+                row.addView(tile)
+            }
         }
     }
 
@@ -482,8 +580,7 @@ class MainActivity : Activity() {
                 isFocusable = true
                 contentDescription = "نمایش کارت‌های ${player.name}"
                 setOnClickListener {
-                    selectedPlayerId = player.id
-                    refreshPlayerSidebar(game)
+                    onPlayerRowTapped(game, player)
                 }
             }
             list.addView(entry, LinearLayout.LayoutParams(
@@ -507,8 +604,200 @@ class MainActivity : Activity() {
         if (player.bank.isEmpty()) {
             row.addView(label("بدون کارت ذخیره‌شده", 11f))
         } else {
-            player.bank.forEach { row.addView(makeCardTile(it, compact = true)) }
+            player.bank.forEach { card ->
+                val tile = makeCardTile(card, compact = true)
+                if (game.pendingEffect?.playerIndex == game.currentPlayer &&
+                    (game.pendingEffect?.cardType == CardType.CANNON || game.pendingEffect?.cardType == CardType.SWORD)) {
+                    tile.isClickable = true
+                    tile.isFocusable = true
+                    tile.setOnClickListener { onBankCardTapped(game, player.id, card) }
+                }
+                row.addView(tile)
+            }
         }
+    }
+
+    private fun refreshDeckDock(game: GameState) {
+        drawDeckCountLabel?.text = "${game.drawDeck.size.toPersianDigits()} کارت"
+        burnDeckCountLabel?.text = "${game.burnDeck.size.toPersianDigits()} کارت"
+        val canAct = canCurrentPlayerAct(game)
+        drawDeckControl?.alpha = if (canAct) 1f else 0.72f
+        burnDeckControl?.alpha = if (canAct) 1f else 0.72f
+    }
+
+    private fun canCurrentPlayerAct(game: GameState): Boolean {
+        if (state !== game || game.finished) return false
+        val active = game.players.getOrNull(game.currentPlayer) ?: return false
+        return active.isHuman && (!aiSequenceRunning || game.passAndPlay)
+    }
+
+    private fun animateDeckControl(control: View?, onFinished: () -> Unit) {
+        if (control == null || reducedMotion) {
+            onFinished()
+            return
+        }
+        control.animate().cancel()
+        control.animate().rotationBy(3.5f).scaleX(0.92f).scaleY(0.92f).setDuration(110)
+            .withEndAction {
+                control.animate().rotation(0f).scaleX(1f).scaleY(1f).setDuration(130)
+                    .withEndAction { onFinished() }.start()
+            }.start()
+    }
+
+    private fun onDrawDeckTapped(game: GameState) {
+        if (!canCurrentPlayerAct(game) || drawAnimationRunning) return
+        if (game.pendingEffect != null) {
+            engine.skipPendingEffect(game)
+            selectedHookIds.clear()
+            finishPlayerAction(game)
+            return
+        }
+        if (game.drawDeck.isEmpty()) {
+            if (game.board.isNotEmpty()) onDrawDeckLongPressed(game)
+            else {
+                game.message = "دستهٔ کارت تمام شده است."
+                renderGame()
+            }
+            return
+        }
+        drawAnimationRunning = true
+        animateDeckControl(drawDeckControl) {
+            drawAnimationRunning = false
+            if (!canCurrentPlayerAct(game) || game.pendingEffect != null) return@animateDeckControl
+            engine.draw(game)
+            finishPlayerAction(game)
+        }
+    }
+
+    private fun onDrawDeckLongPressed(game: GameState): Boolean {
+        if (!canCurrentPlayerAct(game)) return true
+        if (game.pendingEffect != null) {
+            if (::status.isInitialized) status.text = "برای رد اثر ویژه، دستهٔ اصلی را یک بار لمس کن."
+            return true
+        }
+        if (game.board.isEmpty()) {
+            if (::status.isInitialized) status.text = "هنوز گنجی روی میز نیست که جمع شود."
+            return true
+        }
+        animateDeckControl(drawDeckControl) {
+            if (canCurrentPlayerAct(game) && game.pendingEffect == null) collectAfterConfirmation(game)
+        }
+        return true
+    }
+
+    private fun onBurnDeckTapped(game: GameState) {
+        if (!canCurrentPlayerAct(game)) return
+        val effect = game.pendingEffect
+        if (effect?.cardType != CardType.MAP || effect.playerIndex != game.currentPlayer) {
+            if (::status.isInitialized) status.text = "دستهٔ سوخته فقط هنگام استفاده از نقشه قابل بازیابی است."
+            return
+        }
+        animateDeckControl(burnDeckControl) {
+            if (!canCurrentPlayerAct(game) || game.pendingEffect?.cardType != CardType.MAP) return@animateDeckControl
+            val actor = game.players[game.currentPlayer]
+            val success = if (actor.trait == TraitType.NAVIGATOR) {
+                val chosen = game.burnDeck.filter { card -> game.board.none { it.type == card.type } }
+                    .maxByOrNull { it.value }
+                chosen != null && engine.resolveMap(game, chosen.id)
+            } else engine.resolveMap(game)
+            if (success) finishPlayerAction(game) else {
+                game.message = "کارت قابل بازیابی نیست؛ برای رد اثر، دستهٔ اصلی را لمس کن."
+                renderGame()
+            }
+        }
+    }
+
+    private fun onPlayerRowTapped(game: GameState, player: PlayerData) {
+        if (!canCurrentPlayerAct(game)) return
+        val effect = game.pendingEffect
+        if (effect != null && effect.playerIndex == game.currentPlayer &&
+            player.id != game.currentPlayer &&
+            (effect.cardType == CardType.CANNON || effect.cardType == CardType.SWORD)) {
+            selectedPlayerId = player.id
+            if (effect.cardType == CardType.CANNON && player.trait == TraitType.MISFIRE) {
+                if (engine.resolveCannon(game, player.id)) finishPlayerAction(game) else renderGame()
+                return
+            }
+            if (player.bank.isEmpty()) {
+                game.message = "این بازیکن کارت ذخیره‌شده‌ای برای هدف‌گیری ندارد."
+                renderGame()
+                return
+            }
+        }
+        selectedPlayerId = player.id
+        refreshPlayerSidebar(game)
+    }
+
+    private fun onBankCardTapped(game: GameState, ownerId: Int, card: CardDefinition) {
+        if (!canCurrentPlayerAct(game)) return
+        val effect = game.pendingEffect ?: return
+        if (effect.playerIndex != game.currentPlayer) return
+        when (effect.cardType) {
+            CardType.CANNON -> {
+                if (ownerId == game.currentPlayer) return
+                val target = game.players.getOrNull(ownerId) ?: return
+                val success = if (target.trait == TraitType.MISFIRE) engine.resolveCannon(game, target.id)
+                    else engine.resolveCannon(game, target.id, card.type)
+                if (success) finishPlayerAction(game) else {
+                    game.message = "این کارت برای توپ قابل هدف‌گیری نیست."
+                    renderGame()
+                }
+            }
+            CardType.SWORD -> {
+                if (ownerId == game.currentPlayer) return
+                if (engine.resolveSword(game, ownerId, card.id)) finishPlayerAction(game) else {
+                    game.message = "این کارت برای شمشیر مجاز نیست."
+                    renderGame()
+                }
+            }
+            CardType.HOOK -> {
+                if (ownerId != game.currentPlayer) return
+                val limit = if (game.players[game.currentPlayer].trait == TraitType.CAPTAINS_HOOK) 2 else 1
+                if (card.id in selectedHookIds) {
+                    selectedHookIds.remove(card.id)
+                } else {
+                    val selectedTypes = selectedHookIds.mapNotNull { id ->
+                        game.players[game.currentPlayer].bank.firstOrNull { it.id == id }?.type
+                    }.toSet()
+                    if (selectedHookIds.size < limit && card.type !in selectedTypes &&
+                        game.board.none { it.type == card.type }) selectedHookIds.add(card.id)
+                    else game.message = "قلاب فقط کارت‌هایی با نوع متفاوت و بدون نمونه روی میز می‌پذیرد."
+                }
+                refreshOwnHand(game)
+                refreshSelectedPlayerHand(game)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun applySelectedHookCards(game: GameState): Boolean {
+        if (!canCurrentPlayerAct(game) || game.pendingEffect?.cardType != CardType.HOOK) return true
+        if (selectedHookIds.isEmpty()) {
+            if (::status.isInitialized) status.text = "اول دست‌کم یک کارت از نوار پایین انتخاب کن."
+            return true
+        }
+        if (engine.resolveHook(game, selectedHookIds.toList())) {
+            selectedHookIds.clear()
+            finishPlayerAction(game)
+        } else {
+            game.message = "کارت‌های انتخابی برای قلاب مجاز نیستند."
+            renderGame()
+        }
+        return true
+    }
+
+    private fun leaveGameScreen(game: GameState) {
+        aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+        aiSequenceRunning = false
+        restartAiWhenResumed = false
+        aiDrawsThisTurn = 0
+        aiActionCount = 0
+        drawAnimationRunning = false
+        if (game.finished) {
+            state = null
+            deleteSavedGame()
+        } else saveGame(game)
+        showMainMenu()
     }
 
     private fun label(text: String, size: Float = 16f): TextView = TextView(this).apply {
@@ -956,57 +1245,26 @@ class MainActivity : Activity() {
         }
         feedbackForMessage(game.message)
 
-        val deckRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        fun addDeckIndicator(drawableName: String, title: String, count: Int, description: String) {
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                background = roundedDrawable(panelColor, mutedGold, 1)
-                setPadding(dp(8), dp(7), dp(8), dp(7))
-                contentDescription = "$description: $count cards"
-            }
-            val imageId = resources.getIdentifier(drawableName, "drawable", packageName)
-            if (imageId != 0) {
-                card.addView(ImageView(this).apply {
-                    setImageResource(imageId)
-                    setColorFilter(cardBackColors[selectedCardBack])
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                    contentDescription = description
-                }, LinearLayout.LayoutParams(dp(62), dp(70)))
-            }
-            card.addView(label("$title  •  $count", 13f).apply { gravity = Gravity.CENTER })
-            deckRow.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = dp(8)
-            })
-        }
-        addDeckIndicator("backcart", "دستهٔ کارت", game.drawDeck.size, "دستهٔ کارت")
-        addDeckIndicator("backcartburn", "کارت‌های سوخته", game.burnDeck.size, "کارت‌های سوخته")
-        root.addView(deckRow, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(8) })
-        root.addView(panel("نوبت ${game.turnNumber.toPersianDigits()}: ${active.name}", 18f))
-        root.addView(label("توانایی: ${active.trait?.let { traitNameFa(it) } ?: "انتخاب نشده"}", 14f))
-        if (game.pendingForcedDraws > 0) {
-            root.addView(panel("فشار کراکن: ${game.pendingForcedDraws.toPersianDigits()} کارت اجباری باقی مانده", 14f))
-        }
-
         root.addView(label("میز گنج  •  ${game.board.size.toPersianDigits()} کارت", 17f))
-        if (game.board.isEmpty()) root.addView(panel("دریا آرام است؛ اولین کارت را بردارید!", 15f))
-        else {
+        if (game.board.isEmpty()) {
+            root.addView(panel("دریا آرام است؛ برای برداشتن اولین کارت، دستهٔ پایین را لمس کن.", 15f))
+        } else {
             val strip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             game.board.forEachIndexed { index, card ->
                 val protected = card.id in game.protectedCardIds
                 val tile = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
-                    background = roundedDrawable(cardColor(card.type), if (protected) Color.rgb(111, 220, 188) else gold, if (protected) 3 else 1)
+                    background = roundedDrawable(cardColor(card.type),
+                        if (protected) Color.rgb(111, 220, 188) else gold,
+                        if (protected) 3 else 1)
                     elevation = dp(5).toFloat()
                     contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
                     alpha = if (reducedMotion) 1f else 0f
-                    scaleX = if (reducedMotion) 1f else 0.75f
-                    scaleY = if (reducedMotion) 1f else 0.75f
-                    translationY = if (reducedMotion) 0f else dp(14).toFloat()
-                    rotation = if (reducedMotion) 0f else if (index % 2 == 0) -4f else 4f
+                    scaleX = if (reducedMotion) 1f else 0.68f
+                    scaleY = if (reducedMotion) 1f else 0.68f
+                    translationY = if (reducedMotion) 0f else dp(28).toFloat()
+                    rotation = if (reducedMotion) 0f else if (index % 2 == 0) -7f else 7f
                 }
                 val cardArtId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
                 if (cardArtId != 0) {
@@ -1014,9 +1272,9 @@ class MainActivity : Activity() {
                         setImageResource(cardArtId)
                         scaleType = ImageView.ScaleType.FIT_CENTER
                         contentDescription = "${card.type.displayName} card artwork"
-                    }, LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(70)
-                    ).apply { topMargin = dp(4) })
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(70)).apply {
+                        topMargin = dp(4)
+                    })
                 } else {
                     tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, dp(70)
@@ -1031,7 +1289,7 @@ class MainActivity : Activity() {
                     contentDescription = card.type.displayName
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
                 tile.addView(TextView(this).apply {
-                    text = "${card.value} pts${if (protected) "  •  SHIELDED" else ""}"
+                    text = "${card.value.toPersianDigits()} امتیاز${if (protected) " • محافظت‌شده" else ""}"
                     textSize = (if (protected) 9f else 11f) * textScale
                     gravity = Gravity.CENTER
                     typeface = Typeface.DEFAULT_BOLD
@@ -1045,10 +1303,10 @@ class MainActivity : Activity() {
                 })
                 if (!reducedMotion) {
                     tile.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f).rotation(0f)
-                        .setStartDelay(index * 45L).setDuration(300).setInterpolator(DecelerateInterpolator()).start()
+                        .setStartDelay(index * 45L).setDuration(330).setInterpolator(DecelerateInterpolator()).start()
                     tile.postDelayed({
                         when (card.type) {
-                            CardType.CANNON -> tile.animate().rotationBy(9f).setDuration(90).withEndAction {
+                            CardType.CANNON -> tile.animate().rotationBy(12f).setDuration(90).withEndAction {
                                 tile.animate().rotation(0f).setDuration(140).start()
                             }.start()
                             CardType.KRAKEN -> tile.animate().scaleX(1.08f).scaleY(1.08f).setDuration(180).withEndAction {
@@ -1073,22 +1331,16 @@ class MainActivity : Activity() {
             }
             root.addView(HorizontalScrollView(this).apply {
                 isHorizontalScrollBarEnabled = false
-                contentDescription = "Horizontal treasure card list"
+                contentDescription = "میز کارت‌های گنج"
                 addView(strip)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
 
-        root.addView(label("وضعیت بازیکنان", 17f))
-        root.addView(panel(game.players.joinToString("\n") { player ->
-            "${if (player.id == 0) captainAvatar else avatars[player.id % avatars.size]} ${player.name} — ${player.bank.size.toPersianDigits()} کارت — ${engine.scoreFor(player).toPersianDigits()} امتیاز" +
-                (player.trait?.let { "  •  ${traitNameFa(it)}" } ?: "")
-        }, 14f))
-
-        val currentBank = active.bank.groupingBy { it.type }.eachCount().entries
-            .joinToString("     ") { "${it.key.symbol} ${it.value}" }.ifEmpty { "هنوز کارتی جمع نشده" }
-        root.addView(panel("کارت‌های ذخیره‌شدهٔ ${active.name}\n$currentBank", 14f))
-        root.addView(label("رویدادهای اخیر", 14f))
-        root.addView(panel(game.turnLog.takeLast(4).joinToString("\n").ifEmpty { "بازی تازه آغاز شده است." }, 12f))
+        if (!game.finished && aiSequenceRunning && !game.passAndPlay && !active.isHuman) {
+            root.addView(panel("ربات ${active.name} در حال انتخاب حرکت است.", 14f))
+        } else if (!game.finished && game.pendingEffect != null) {
+            showEffectControls(game)
+        }
 
         if (game.finished) {
             trackFinishedGame(game)
@@ -1097,154 +1349,33 @@ class MainActivity : Activity() {
                 setTextColor(gold)
                 typeface = Typeface.DEFAULT_BOLD
             })
-            root.addView(ConfettiView(this), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(62)))
-            button("جزئیات امتیاز") { showScoreBreakdown(game) }
-            button("گزارش کامل بازی") { showTurnLog(game) }
-            button("بازی دوباره") { startNewGame(lastPlayerCount, lastDifficulty, lastRules, lastPassAndPlay) }
-            button("بازی جدید") { showSetup() }
+            root.addView(ConfettiView(this), LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(62)
+            ))
+            button("خروج") { leaveGameScreen(game) }
             deleteSavedGame()
             return
         }
 
-        val robotTurn = aiSequenceRunning && !game.passAndPlay && !active.isHuman
-        if (robotTurn) {
-            root.addView(panel("نوبت ربات: ${active.name}", 18f))
-            root.addView(label("تماشا کن؛ کارت‌برداشتن، استفاده از توانایی‌ها و جمع‌کردن گنج به‌ترتیب اجرا می‌شوند.", 13f))
-        } else if (game.pendingEffect != null) {
-            showEffectControls(game)
-        } else {
-            button("برداشتن کارت") {
-                engine.draw(game)
-                finishPlayerAction(game)
-            }
-            button("جمع کردن کارت‌ها / پایان نوبت") { confirmCollect(game) }
-        }
-        if (!robotTurn) button("گزارش کامل بازی") { showTurnLog(game) }
-        if (!robotTurn) button("راهنمای کارت‌ها") { showCardGlossary() }
-        if (!robotTurn) button("راهنمای توانایی") {
-            base("راهنمای توانایی")
-            root.addView(panel(active.trait?.let { traitNameFa(it) } ?: "انتخاب نشده", 18f))
-            root.addView(label(active.trait?.description ?: "No trait selected."))
-            if (active.trait == TraitType.DAVY_JONES_LOCKER) {
-                val target = game.davyJonesTargets[active.id]?.let { game.players[it].name } ?: "No target"
-                root.addView(panel("Marked rival: $target", 14f))
-            }
-            button("بازگشت به میز بازی") { renderGame() }
-        }
-        button("منوی اصلی") {
-            aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
-            aiSequenceRunning = false
-            restartAiWhenResumed = false
-            saveGame(game)
-            showMainMenu()
-        }
+        button("خروج") { leaveGameScreen(game) }
         saveGame(game)
     }
 
+    private fun effectInstruction(game: GameState): String = when (game.pendingEffect?.cardType) {
+        CardType.CANNON -> "توپ: بازیکن هدف را در سمت راست انتخاب کن، سپس یکی از کارت‌های او را لمس کن. هدف دارای خطای توپ را فقط لمس کن."
+        CardType.HOOK -> "قلاب: کارت یا کارت‌های خودت را در نوار پایین انتخاب کن؛ برای اجرا، عنوان کارت‌های خودت را نگه دار."
+        CardType.MAP -> "نقشه: دستهٔ سوخته در پایین را لمس کن تا کارت بازیابی شود."
+        CardType.SWORD -> "شمشیر: بازیکن هدف را در سمت راست انتخاب کن، سپس کارت موردنظرش را لمس کن."
+        else -> "برای رد اثر ویژه، دستهٔ اصلی کارت را لمس کن."
+    }
+
     private fun showEffectControls(game: GameState) {
-        val effect = game.pendingEffect ?: return
-        val player = game.players[game.currentPlayer]
-        root.addView(panel("کارت ویژه: ${cardNameFa(effect.cardType)}", 18f))
-        when (effect.cardType) {
-            CardType.CANNON -> {
-                root.addView(label("حریف و نوع کارت ذخیره‌شده را برای هدف‌گیری انتخاب کنید.", 14f))
-                val targets = game.players.filter { it.id != player.id }
-                var foundTarget = false
-                targets.forEach { target ->
-                    if (target.trait == TraitType.MISFIRE) {
-                        foundTarget = true
-                        button("💣  ${target.name} — خطای توپ (سوزاندن کارت بالایی)") {
-                            if (engine.resolveCannon(game, target.id)) finishPlayerAction(game)
-                        }
-                    } else {
-                        target.bank.map { it.type }.distinct().forEach { type ->
-                            foundTarget = true
-                            button("💣  ${target.name}: ${type.symbol} ${cardNameFa(type)}") {
-                                if (engine.resolveCannon(game, target.id, type)) finishPlayerAction(game)
-                                else renderGame()
-                            }
-                        }
-                    }
-                }
-                if (!foundTarget) root.addView(label("هیچ حریفی کارت قابل هدف‌گیری ندارد؛ این اثر را رد کنید."))
-            }
-            CardType.HOOK -> {
-                val limit = if (player.trait == TraitType.CAPTAINS_HOOK) 2 else 1
-                root.addView(label("تا $limit کارت از نوع‌های متفاوت را برای بازگرداندن به میز انتخاب کنید.", 14f))
-                player.bank.filter { card -> game.board.none { it.type == card.type } }.forEach { card ->
-                    val checked = card.id in selectedHookIds
-                    val toggle = checkbox(
-                        "${if (checked) "☑" else "☐"} ${card.type.symbol} ${cardNameFa(card.type)} — ارزش ${card.value.toPersianDigits()}",
-                        checked
-                    )
-                    toggle.setOnCheckedChangeListener { _, isChecked ->
-                        if (isChecked) {
-                            val currentTypes = selectedHookIds.mapNotNull { id -> player.bank.firstOrNull { it.id == id }?.type }.toSet()
-                            if (selectedHookIds.size >= limit || card.type in currentTypes) {
-                                toggle.isChecked = false
-                                return@setOnCheckedChangeListener
-                            }
-                            selectedHookIds += card.id
-                        } else selectedHookIds -= card.id
-                    }
-                    root.addView(toggle)
-                }
-                button("🪝 بازگرداندن کارت‌های انتخاب‌شده (${selectedHookIds.size}/$limit)") {
-                    if (engine.resolveHook(game, selectedHookIds.toList())) {
-                        selectedHookIds.clear()
-                        finishPlayerAction(game)
-                    } else {
-                        game.message = "حداکثر $limit کارت از نوع‌های متفاوت انتخاب کنید."
-                        renderGame()
-                    }
-                }
-            }
-            CardType.MAP -> {
-                if (player.trait == TraitType.NAVIGATOR) {
-                    root.addView(label("ناوبر: هر کارت مجاز را از دستهٔ سوخته انتخاب کنید.", 14f))
-                    game.burnDeck.filter { card -> game.board.none { it.type == card.type } }
-                        .sortedByDescending { it.value }.forEach { card ->
-                            button("🗺  ${card.type.symbol} ${cardNameFa(card.type)} — ${card.value.toPersianDigits()}") {
-                                if (engine.resolveMap(game, card.id)) finishPlayerAction(game)
-                                else renderGame()
-                            }
-                        }
-                } else {
-                    val top = game.burnDeck.firstOrNull()
-                    if (top == null) root.addView(label("دستهٔ کارت‌های سوخته خالی است."))
-                    else root.addView(panel("کارت بالایی دستهٔ سوخته: ${top.type.symbol} ${cardNameFa(top.type)} — ${top.value.toPersianDigits()}", 15f))
-                    button("🗺 برداشتن کارت بالایی از دستهٔ سوخته") {
-                        if (engine.resolveMap(game)) finishPlayerAction(game) else renderGame()
-                    }
-                }
-            }
-            CardType.SWORD -> {
-                root.addView(label("یک کارت مجاز را برای دزدیدن از حریف انتخاب کنید.", 14f))
-                var found = false
-                game.players.filter { it.id != player.id }.forEach { target ->
-                    target.bank.filter { card ->
-                        player.trait == TraitType.SWORDSMAN || player.bank.none { it.type == card.type }
-                    }.forEach { card ->
-                        found = true
-                        button("⚔  ${target.name}: ${card.type.symbol} ${cardNameFa(card.type)}") {
-                            if (engine.resolveSword(game, target.id, card.id)) finishPlayerAction(game)
-                            else renderGame()
-                        }
-                    }
-                }
-                if (!found) root.addView(label("هیچ حریفی کارت مجاز ندارد؛ این اثر را رد کنید."))
-            }
-            else -> Unit
-        }
-        button("رد کردن اثر کارت ویژه") {
-            engine.skipPendingEffect(game)
-            selectedHookIds.clear()
-            finishPlayerAction(game)
-        }
+        root.addView(panel(effectInstruction(game), 14f))
     }
 
     private fun finishPlayerAction(game: GameState) {
         if (game.finished) trackFinishedGame(game)
+        selectedHookIds.clear()
         if (game.finished) deleteSavedGame() else saveGame(game)
         if (!game.finished && !game.passAndPlay && game.currentPlayer != 0) {
             beginAiSequence(game)
@@ -1323,33 +1454,15 @@ class MainActivity : Activity() {
         mainHandler.postDelayed(next, delayMs)
     }
 
-    private fun confirmCollect(game: GameState) {
-        if (game.board.size >= 3) {
-            AlertDialog.Builder(this)
-                .setTitle("کارت‌ها جمع شوند؟")
-                .setMessage("شما ${game.board.size.toPersianDigits()} کارت ذخیره می‌کنید. جمع کردن کارت‌ها نوبت را پایان می‌دهد.")
-                .setNegativeButton("ادامهٔ کارت‌برداشتن", null)
-                .setPositiveButton("جمع کردن") { _, _ -> collectAfterConfirmation(game) }
-                .show()
-        } else collectAfterConfirmation(game)
-    }
-
     private fun collectAfterConfirmation(game: GameState) {
         val active = game.players[game.currentPlayer]
         val hasBonus = game.rules.chestKeyBonusEnabled &&
             game.board.any { it.type == CardType.CHEST } && game.board.any { it.type == CardType.KEY }
         if (active.trait == TraitType.PLUNDERER && hasBonus) {
-            val rivals = game.players.filter { it.id != active.id && it.bank.isNotEmpty() }
-            if (rivals.isNotEmpty()) {
-                AlertDialog.Builder(this)
-                    .setTitle("غارت جایزه")
-                    .setItems(rivals.map { "${it.name} — ${it.bank.size.toPersianDigits()} کارت ذخیره‌شده" }.toTypedArray()) { _, which ->
-                        if (engine.collect(game, rivals[which].id)) finishPlayerAction(game)
-                    }
-                    .setNegativeButton("لغو", null)
-                    .show()
-                return
-            }
+            val target = game.players.filter { it.id != active.id && it.bank.isNotEmpty() }
+                .maxByOrNull { it.bank.size }?.id
+            if (engine.collect(game, target)) finishPlayerAction(game) else renderGame()
+            return
         }
         if (engine.collect(game)) finishPlayerAction(game) else renderGame()
     }
