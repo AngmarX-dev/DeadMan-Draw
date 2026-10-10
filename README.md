@@ -36,6 +36,14 @@ Draw cards to grow the shared board. Each type normally appears only once on the
 - **Scrollable card board and large tap targets**, with portrait and landscape support.
 - **First-run guide, card glossary, trait descriptions, turn log, end-game score breakdown and match statistics.**
 
+### Landscape table and visible AI turns
+
+- The live game switches to landscape orientation while menus remain free to use the device's normal orientation.
+- A dedicated player/robot sidebar stays on the right. Tap any entry to reveal that player's currently banked cards and values.
+- Your own banked cards remain in a persistent horizontal dock at the bottom of the play area, even as the treasure board scrolls.
+- AI opponents now play one action at a time with a visible delay instead of completing their entire turn instantly. Card draws, special-effect resolution and collections are shown with the existing card animations and a highlighted active-robot row.
+- AI turns resume after the activity returns from the background, and the menu action remains available without leaving a delayed AI callback running.
+
 ### Persian interface inspired by `BackOfGame.pdf`
 
 - Persian, right-to-left main menu with New Game, Continue, Group Game, Guide, Settings and Coin Shop navigation.
