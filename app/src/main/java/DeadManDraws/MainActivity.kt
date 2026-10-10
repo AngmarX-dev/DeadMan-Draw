@@ -83,9 +83,12 @@ class MainActivity : Activity() {
     private var ownHandCardsRow: LinearLayout? = null
     private var drawDeckControl: LinearLayout? = null
     private var burnDeckControl: LinearLayout? = null
+    private var drawDeckImageView: ImageView? = null
+    private var burnDeckImageView: ImageView? = null
     private var drawDeckCountLabel: TextView? = null
     private var burnDeckCountLabel: TextView? = null
     private var drawAnimationRunning = false
+    private var lastRenderedBoardCardIds: Set<Int> = emptySet()
     private var landscapeScreenRoot: LinearLayout? = null
 
     private var navy = Color.rgb(13, 27, 35)
@@ -324,12 +327,16 @@ class MainActivity : Activity() {
             }
             val imageId = resources.getIdentifier(drawableName, "drawable", packageName)
             if (imageId != 0) {
-                pile.addView(ImageView(this).apply {
+                val pileImage = ImageView(this).apply {
                     setImageResource(imageId)
-                    setColorFilter(cardBackColors[selectedCardBack])
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     contentDescription = description
-                }, LinearLayout.LayoutParams(dp(46), dp(62)).apply { marginEnd = dp(7) })
+                    adjustViewBounds = true
+                }
+                if (isDrawPile) drawDeckImageView = pileImage else burnDeckImageView = pileImage
+                pile.addView(pileImage, LinearLayout.LayoutParams(dp(46), dp(62)).apply {
+                    marginEnd = dp(7)
+                })
             }
             val info = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -427,28 +434,6 @@ class MainActivity : Activity() {
         ))
         sidebar.addView(playerListScroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
-
-        selectedPlayerCardsTitle = label("کارت‌های بازیکن", 12f).apply {
-            gravity = Gravity.CENTER
-            setTextColor(gold)
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(2), dp(3), dp(2), dp(2))
-        }
-        sidebar.addView(selectedPlayerCardsTitle)
-        val selectedCardsScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-            contentDescription = "کارت‌های بازیکن انتخاب‌شده"
-        }
-        selectedPlayerCardsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        selectedCardsScroll.addView(selectedPlayerCardsRow)
-        sidebar.addView(selectedCardsScroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(88)
         ))
 
         if (!reducedMotion) {
@@ -550,6 +535,7 @@ class MainActivity : Activity() {
         val list = playerListColumn ?: return
         if (game.players.none { it.id == selectedPlayerId }) selectedPlayerId = 0
         list.removeAllViews()
+
         game.players.forEach { player ->
             val selected = player.id == selectedPlayerId
             val active = player.id == game.currentPlayer
@@ -560,36 +546,93 @@ class MainActivity : Activity() {
                 player.id == 0 -> captainAvatar
                 else -> "👤"
             }
-            val entry = TextView(this).apply {
-                text = "$prefix  ${player.name}\n${if (robot) "ربات" else "بازیکن"}  •  ${player.bank.size.toPersianDigits()} کارت  •  ${engine.scoreFor(player).toPersianDigits()} امتیاز"
-                textSize = 11f * textScale
-                setTextColor(if (active) gold else Color.WHITE)
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(7), dp(3), dp(7), dp(3))
-                minHeight = dp(47)
+
+            // Name, status, and the player's full-sized banked cards live in one frame.
+            val frame = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
                 background = roundedDrawable(
                     when {
                         active -> Color.rgb(68, 63, 35)
                         selected -> mutedGold
-                        else -> navy
+                        else -> panelColor
                     },
-                    if (active) gold else if (selected) gold else mutedGold,
+                    if (active || selected) gold else mutedGold,
                     if (active || selected) 2 else 1
                 )
+                setPadding(dp(5), dp(4), dp(5), dp(5))
+                contentDescription = "بازیکن ${player.name} و کارت‌های ذخیره‌شده"
+            }
+
+            val header = TextView(this).apply {
+                text = "$prefix  ${player.name}\n${if (robot) "ربات" else "بازیکن"}  •  ${player.bank.size.toPersianDigits()} کارت  •  ${engine.scoreFor(player).toPersianDigits()} امتیاز"
+                textSize = 13f * textScale
+                setTextColor(if (active || selected) gold else Color.WHITE)
+                gravity = Gravity.CENTER_VERTICAL
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(dp(5), dp(4), dp(5), dp(5))
+                minHeight = dp(45)
                 isClickable = true
                 isFocusable = true
-                contentDescription = "نمایش کارت‌های ${player.name}"
-                setOnClickListener {
-                    onPlayerRowTapped(game, player)
+                contentDescription = "انتخاب ${player.name}"
+                setOnClickListener { onPlayerRowTapped(game, player) }
+            }
+            frame.addView(header, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+
+            val cardsScroll = HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                isFillViewport = false
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                contentDescription = "کارت‌های ${player.name}؛ پیمایش افقی"
+            }
+            val cardsRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(1), dp(2), dp(1), dp(2))
+            }
+
+            if (player.bank.isEmpty()) {
+                cardsRow.addView(label("هنوز کارت ذخیره نشده", 12f).apply {
+                    setTextColor(Color.LTGRAY)
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(7), 0, dp(7), 0)
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(90)
+                ))
+            } else {
+                player.bank.forEach { card ->
+                    val tile = makeCardTile(card, compact = false)
+                    val effect = game.pendingEffect
+                    val canTargetCard = effect != null &&
+                        effect.playerIndex == game.currentPlayer &&
+                        player.id != game.currentPlayer &&
+                        (effect.cardType == CardType.CANNON || effect.cardType == CardType.SWORD)
+                    if (canTargetCard) {
+                        tile.isClickable = true
+                        tile.isFocusable = true
+                        tile.setOnClickListener { onBankCardTapped(game, player.id, card) }
+                    }
+                    cardsRow.addView(tile)
                 }
             }
-            list.addView(entry, LinearLayout.LayoutParams(
+            cardsScroll.addView(cardsRow)
+            frame.addView(cardsScroll, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(101)
+            ))
+
+            list.addView(frame, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(4) })
+            ).apply { bottomMargin = dp(6) })
+
             if (active && robot && aiSequenceRunning && !reducedMotion) {
-                entry.animate().scaleX(1.025f).scaleY(1.025f).setDuration(280)
+                frame.animate().scaleX(1.018f).scaleY(1.018f).setDuration(260)
                     .withEndAction {
-                        if (entry.parent != null) entry.animate().scaleX(1f).scaleY(1f).setDuration(280).start()
+                        if (frame.parent != null) {
+                            frame.animate().scaleX(1f).scaleY(1f).setDuration(260).start()
+                        }
                     }.start()
             }
         }
@@ -636,10 +679,21 @@ class MainActivity : Activity() {
             onFinished()
             return
         }
-        control.animate().cancel()
-        control.animate().rotationBy(3.5f).scaleX(0.92f).scaleY(0.92f).setDuration(110)
+        val cardBack = when {
+            control === drawDeckControl -> drawDeckImageView
+            control === burnDeckControl -> burnDeckImageView
+            else -> null
+        } ?: control
+        cardBack.animate().cancel()
+        cardBack.rotationY = 0f
+        cardBack.translationY = 0f
+        cardBack.animate().rotationY(82f).translationY(-dp(7).toFloat())
+            .scaleX(0.93f).scaleY(0.93f).setDuration(115)
+            .withInterpolator(DecelerateInterpolator())
             .withEndAction {
-                control.animate().rotation(0f).scaleX(1f).scaleY(1f).setDuration(130)
+                cardBack.animate().rotationY(0f).translationY(0f)
+                    .scaleX(1f).scaleY(1f).setDuration(135)
+                    .withInterpolator(DecelerateInterpolator())
                     .withEndAction { onFinished() }.start()
             }.start()
     }
@@ -1150,6 +1204,8 @@ class MainActivity : Activity() {
         deleteSavedGame()
         trackedFinishedGame = false
         selectedHookIds.clear()
+        lastRenderedBoardCardIds = emptySet()
+        drawAnimationRunning = false
         state = engine.newGame(playerCount, skill, rules, passPlay)
         state!!.players[0].name = captainName.ifBlank { "Captain" }
         state!!.players.drop(1).forEachIndexed { index, player ->
@@ -1215,6 +1271,7 @@ class MainActivity : Activity() {
 
     private fun renderGame() {
         val game = state ?: return
+        val previousBoardCardIds = lastRenderedBoardCardIds
         baseLandscapeGame("دزدان دریایی", game)
         val active = game.players[game.currentPlayer]
         status = panel(game.message, 16f).apply {
@@ -1252,6 +1309,7 @@ class MainActivity : Activity() {
             val strip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             game.board.forEachIndexed { index, card ->
                 val protected = card.id in game.protectedCardIds
+                val animateThisCard = !reducedMotion && card.id !in previousBoardCardIds
                 val tile = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
@@ -1260,11 +1318,12 @@ class MainActivity : Activity() {
                         if (protected) 3 else 1)
                     elevation = dp(5).toFloat()
                     contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
-                    alpha = if (reducedMotion) 1f else 0f
-                    scaleX = if (reducedMotion) 1f else 0.68f
-                    scaleY = if (reducedMotion) 1f else 0.68f
-                    translationY = if (reducedMotion) 0f else dp(28).toFloat()
-                    rotation = if (reducedMotion) 0f else if (index % 2 == 0) -7f else 7f
+                    alpha = if (animateThisCard) 0.25f else 1f
+                    scaleX = if (animateThisCard) 0.78f else 1f
+                    scaleY = if (animateThisCard) 0.78f else 1f
+                    translationY = if (animateThisCard) dp(24).toFloat() else 0f
+                    rotationY = if (animateThisCard) 82f else 0f
+                    rotation = 0f
                 }
                 val cardArtId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
                 if (cardArtId != 0) {
@@ -1301,9 +1360,11 @@ class MainActivity : Activity() {
                     bottomMargin = dp(8)
                     topMargin = dp(3)
                 })
-                if (!reducedMotion) {
-                    tile.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f).rotation(0f)
-                        .setStartDelay(index * 45L).setDuration(330).setInterpolator(DecelerateInterpolator()).start()
+                if (animateThisCard) {
+                    tile.animate().alpha(1f).scaleX(1f).scaleY(1f).translationY(0f)
+                        .rotationY(0f).rotation(0f)
+                        .setStartDelay(minOf(index, 5) * 32L).setDuration(380)
+                        .setInterpolator(DecelerateInterpolator()).start()
                     tile.postDelayed({
                         when (card.type) {
                             CardType.CANNON -> tile.animate().rotationBy(12f).setDuration(90).withEndAction {
@@ -1335,6 +1396,8 @@ class MainActivity : Activity() {
                 addView(strip)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+
+        lastRenderedBoardCardIds = game.board.mapTo(mutableSetOf()) { it.id }
 
         if (!game.finished && aiSequenceRunning && !game.passAndPlay && !active.isHuman) {
             root.addView(panel("ربات ${active.name} در حال انتخاب حرکت است.", 14f))
