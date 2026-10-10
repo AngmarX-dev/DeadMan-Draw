@@ -36,6 +36,14 @@ Draw cards to grow the shared board. Each type normally appears only once on the
 - **Scrollable card board and large tap targets**, with portrait and landscape support.
 - **First-run guide, card glossary, trait descriptions, turn log, end-game score breakdown and match statistics.**
 
+### Persian interface inspired by `BackOfGame.pdf`
+
+- Persian, right-to-left main menu with New Game, Continue, Group Game, Guide, Settings and Coin Shop navigation.
+- Player settings include a saved display name, selectable avatar, sound/haptics, reduced motion, text size and table theme.
+- A 12-colour card-back picker applies the selected tint to the Draw/Burn deck art.
+- New Game setup supports 2–8 players, Easy/Normal/Hard difficulty, custom rules and local pass-and-play.
+- The coin shop presents the three packs from the supplied mockups. Real-money purchases are intentionally disabled until a payment provider is integrated; choosing a pack never charges money or grants coins.
+
 ### Imported image assets
 
 The `Images.rar` archive is retained at the repository root. Its original image files are extracted to `app/src/main/assets/images/Images/`; Android-compatible copies are also generated in `app/src/main/res/drawable-nodpi/` with valid lowercase resource names. The game UI loads the card and trait illustrations directly from these Android resources. Unity `.meta` import descriptors are not copied into the Android assets folder.
