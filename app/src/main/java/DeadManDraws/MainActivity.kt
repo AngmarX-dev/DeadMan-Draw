@@ -516,9 +516,9 @@ class MainActivity : Activity() {
         val hookPending = game.pendingEffect?.cardType == CardType.HOOK &&
             game.pendingEffect?.playerIndex == game.currentPlayer
         ownHandTitle?.text = if (hookPending) {
-            "قلاب: کارت انتخاب کن • عنوان را نگه‌دار (\${selectedHookIds.size})"
+            "قلاب: کارت انتخاب کن • عنوان را نگه‌دار (${selectedHookIds.size})"
         } else {
-            "کارت‌های \${player.name} • \${player.bank.size.toPersianDigits()}"
+            "کارت‌های ${player.name} • ${player.bank.size.toPersianDigits()}"
         }
         ownHandTitle?.setOnLongClickListener {
             if (hookPending) applySelectedHookCards(game) else false
@@ -595,7 +595,7 @@ class MainActivity : Activity() {
 
     private fun refreshSelectedPlayerHand(game: GameState) {
         val player = game.players.firstOrNull { it.id == selectedPlayerId } ?: game.players.firstOrNull() ?: return
-        selectedPlayerCardsTitle?.text = "کارت‌های \${player.name}  •  \${player.bank.size.toPersianDigits()}"
+        selectedPlayerCardsTitle?.text = "کارت‌های ${player.name}  •  ${player.bank.size.toPersianDigits()}"
         val row = selectedPlayerCardsRow ?: return
         row.removeAllViews()
         if (player.bank.isEmpty()) {
@@ -615,8 +615,8 @@ class MainActivity : Activity() {
     }
 
     private fun refreshDeckDock(game: GameState) {
-        drawDeckCountLabel?.text = "\${game.drawDeck.size.toPersianDigits()} کارت"
-        burnDeckCountLabel?.text = "\${game.burnDeck.size.toPersianDigits()} کارت"
+        drawDeckCountLabel?.text = "${game.drawDeck.size.toPersianDigits()} کارت"
+        burnDeckCountLabel?.text = "${game.burnDeck.size.toPersianDigits()} کارت"
         val canAct = canCurrentPlayerAct(game)
         drawDeckControl?.alpha = if (canAct) 1f else 0.72f
         burnDeckControl?.alpha = if (canAct) 1f else 0.72f
@@ -1220,7 +1220,7 @@ class MainActivity : Activity() {
         }
         root.addView(status)
         if (aiSequenceRunning && !game.passAndPlay && !active.isHuman) {
-            root.addView(panel("🤖  \${active.name} در حال بازی است؛ حرکت‌ها یکی‌یکی نمایش داده می‌شوند.", 15f))
+            root.addView(panel("🤖  ${active.name} در حال بازی است؛ حرکت‌ها یکی‌یکی نمایش داده می‌شوند.", 15f))
             root.addView(ProgressBar(this).apply {
                 isIndeterminate = true
                 contentDescription = "ربات در حال فکر کردن"
@@ -1242,7 +1242,7 @@ class MainActivity : Activity() {
         }
         feedbackForMessage(game.message)
 
-        root.addView(label("میز گنج  •  \${game.board.size.toPersianDigits()} کارت", 17f))
+        root.addView(label("میز گنج  •  ${game.board.size.toPersianDigits()} کارت", 17f))
         if (game.board.isEmpty()) {
             root.addView(panel("دریا آرام است؛ برای برداشتن اولین کارت، دستهٔ پایین را لمس کن.", 15f))
         } else {
@@ -1256,7 +1256,7 @@ class MainActivity : Activity() {
                         if (protected) Color.rgb(111, 220, 188) else gold,
                         if (protected) 3 else 1)
                     elevation = dp(5).toFloat()
-                    contentDescription = "\${card.type.displayName}, value \${card.value}\${if (protected) ", protected from bust" else ""}"
+                    contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
                     alpha = if (reducedMotion) 1f else 0f
                     scaleX = if (reducedMotion) 1f else 0.68f
                     scaleY = if (reducedMotion) 1f else 0.68f
@@ -1268,7 +1268,7 @@ class MainActivity : Activity() {
                     tile.addView(ImageView(this).apply {
                         setImageResource(cardArtId)
                         scaleType = ImageView.ScaleType.FIT_CENTER
-                        contentDescription = "\${card.type.displayName} card artwork"
+                        contentDescription = "${card.type.displayName} card artwork"
                     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(70)).apply {
                         topMargin = dp(4)
                     })
@@ -1286,12 +1286,12 @@ class MainActivity : Activity() {
                     contentDescription = card.type.displayName
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
                 tile.addView(TextView(this).apply {
-                    text = "\${card.value.toPersianDigits()} امتیاز\${if (protected) " • محافظت‌شده" else ""}"
+                    text = "${card.value.toPersianDigits()} امتیاز${if (protected) " • محافظت‌شده" else ""}"
                     textSize = (if (protected) 9f else 11f) * textScale
                     gravity = Gravity.CENTER
                     typeface = Typeface.DEFAULT_BOLD
                     setTextColor(if (protected) Color.rgb(167, 255, 222) else Color.WHITE)
-                    contentDescription = "Value \${card.value}\${if (protected) ", shielded" else ""}"
+                    contentDescription = "Value ${card.value}${if (protected) ", shielded" else ""}"
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)))
                 strip.addView(tile, LinearLayout.LayoutParams(dp(112), dp(116)).apply {
                     marginEnd = dp(8)
@@ -1334,7 +1334,7 @@ class MainActivity : Activity() {
         }
 
         if (!game.finished && aiSequenceRunning && !game.passAndPlay && !active.isHuman) {
-            root.addView(panel("ربات \${active.name} در حال انتخاب حرکت است.", 14f))
+            root.addView(panel("ربات ${active.name} در حال انتخاب حرکت است.", 14f))
         } else if (!game.finished && game.pendingEffect != null) {
             showEffectControls(game)
         }
@@ -1358,12 +1358,21 @@ class MainActivity : Activity() {
         saveGame(game)
     }
 
+    private fun effectInstruction(game: GameState): String = when (game.pendingEffect?.cardType) {
+        CardType.CANNON -> "توپ: بازیکن هدف را در سمت راست انتخاب کن، سپس یکی از کارت‌های او را لمس کن. هدف دارای خطای توپ را فقط لمس کن."
+        CardType.HOOK -> "قلاب: کارت یا کارت‌های خودت را در نوار پایین انتخاب کن؛ برای اجرا، عنوان کارت‌های خودت را نگه دار."
+        CardType.MAP -> "نقشه: دستهٔ سوخته در پایین را لمس کن تا کارت بازیابی شود."
+        CardType.SWORD -> "شمشیر: بازیکن هدف را در سمت راست انتخاب کن، سپس کارت موردنظرش را لمس کن."
+        else -> "برای رد اثر ویژه، دستهٔ اصلی کارت را لمس کن."
+    }
+
     private fun showEffectControls(game: GameState) {
         root.addView(panel(effectInstruction(game), 14f))
     }
 
     private fun finishPlayerAction(game: GameState) {
         if (game.finished) trackFinishedGame(game)
+        selectedHookIds.clear()
         if (game.finished) deleteSavedGame() else saveGame(game)
         if (!game.finished && !game.passAndPlay && game.currentPlayer != 0) {
             beginAiSequence(game)
@@ -1442,33 +1451,15 @@ class MainActivity : Activity() {
         mainHandler.postDelayed(next, delayMs)
     }
 
-    private fun confirmCollect(game: GameState) {
-        if (game.board.size >= 3) {
-            AlertDialog.Builder(this)
-                .setTitle("کارت‌ها جمع شوند؟")
-                .setMessage("شما ${game.board.size.toPersianDigits()} کارت ذخیره می‌کنید. جمع کردن کارت‌ها نوبت را پایان می‌دهد.")
-                .setNegativeButton("ادامهٔ کارت‌برداشتن", null)
-                .setPositiveButton("جمع کردن") { _, _ -> collectAfterConfirmation(game) }
-                .show()
-        } else collectAfterConfirmation(game)
-    }
-
     private fun collectAfterConfirmation(game: GameState) {
         val active = game.players[game.currentPlayer]
         val hasBonus = game.rules.chestKeyBonusEnabled &&
             game.board.any { it.type == CardType.CHEST } && game.board.any { it.type == CardType.KEY }
         if (active.trait == TraitType.PLUNDERER && hasBonus) {
-            val rivals = game.players.filter { it.id != active.id && it.bank.isNotEmpty() }
-            if (rivals.isNotEmpty()) {
-                AlertDialog.Builder(this)
-                    .setTitle("غارت جایزه")
-                    .setItems(rivals.map { "${it.name} — ${it.bank.size.toPersianDigits()} کارت ذخیره‌شده" }.toTypedArray()) { _, which ->
-                        if (engine.collect(game, rivals[which].id)) finishPlayerAction(game)
-                    }
-                    .setNegativeButton("لغو", null)
-                    .show()
-                return
-            }
+            val target = game.players.filter { it.id != active.id && it.bank.isNotEmpty() }
+                .maxByOrNull { it.bank.size }?.id
+            if (engine.collect(game, target)) finishPlayerAction(game) else renderGame()
+            return
         }
         if (engine.collect(game)) finishPlayerAction(game) else renderGame()
     }
