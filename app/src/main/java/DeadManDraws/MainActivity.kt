@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -14,6 +15,8 @@ import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -25,6 +28,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.HorizontalScrollView
+import android.widget.ProgressBar
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -65,6 +69,18 @@ class MainActivity : Activity() {
     private var trackedFinishedGame = false
     private val selectedHookIds = mutableSetOf<Int>()
     private var toneGenerator: ToneGenerator? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var aiSequenceRunning = false
+    private var aiDrawsThisTurn = 0
+    private var aiActionCount = 0
+    private var restartAiWhenResumed = false
+    private var aiStepRunnable: Runnable? = null
+    private var selectedPlayerId = 0
+    private var playerListColumn: LinearLayout? = null
+    private var selectedPlayerCardsTitle: TextView? = null
+    private var selectedPlayerCardsRow: LinearLayout? = null
+    private var ownHandTitle: TextView? = null
+    private var ownHandCardsRow: LinearLayout? = null
 
     private var navy = Color.rgb(13, 27, 35)
     private var panelColor = Color.rgb(24, 43, 52)
@@ -105,7 +121,11 @@ class MainActivity : Activity() {
             AlertDialog.Builder(this)
                 .setTitle("ادامهٔ بازی؟")
                 .setMessage("یک بازی ناتمام ذخیره شده است. ادامه می‌دهید یا بازی تازه‌ای شروع می‌کنید؟")
-                .setPositiveButton("ادامه") { _, _ -> if (saved.players.firstOrNull()?.trait == null) chooseTrait() else renderGame() }
+                .setPositiveButton("ادامه") { _, _ ->
+                    if (saved.players.firstOrNull()?.trait == null && saved.currentPlayer == 0) chooseTrait()
+                    else if (!saved.passAndPlay && saved.currentPlayer != 0) beginAiSequence(saved)
+                    else renderGame()
+                }
                 .setNegativeButton("بازی جدید") { _, _ ->
                     state = null
                     deleteSavedGame()
@@ -130,11 +150,26 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        if (aiSequenceRunning) restartAiWhenResumed = true
+        aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+        aiSequenceRunning = false
         val game = state
         if (game != null && !game.finished) saveGame(game) else if (game?.finished == true) deleteSavedGame()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (restartAiWhenResumed) {
+            restartAiWhenResumed = false
+            state?.let { game ->
+                if (!game.finished && !game.passAndPlay && game.currentPlayer != 0) beginAiSequence(game)
+            }
+        }
+    }
+
     override fun onDestroy() {
+        aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+        mainHandler.removeCallbacksAndMessages(null)
         toneGenerator?.release()
         toneGenerator = null
         super.onDestroy()
@@ -158,6 +193,7 @@ class MainActivity : Activity() {
         }
 
     private fun base(title: String): LinearLayout {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             setBackgroundColor(navy)
@@ -197,6 +233,282 @@ class MainActivity : Activity() {
             }
         }
         return root
+    }
+
+
+    /**
+     * A dedicated landscape table: play area on the left, selectable player/robot list on
+     * the right, and the human player's cards in a dock that stays visible during play.
+     */
+    private fun baseLandscapeGame(title: String, game: GameState) {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+
+        val screenRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            setBackgroundColor(navy)
+            setPadding(dp(6), dp(3), dp(6), dp(5))
+        }
+        setContentView(screenRoot)
+
+        screenRoot.addView(TextView(this).apply {
+            text = title
+            textSize = 21f * textScale
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            setTextColor(gold)
+            setShadowLayer(dp(6).toFloat(), 0f, 0f, mutedGold)
+            contentDescription = title
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)))
+
+        val contentRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+        }
+        screenRoot.addView(contentRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        val mainColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(navy, panelColor, navy)
+            )
+        }
+        contentRow.addView(mainColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+
+        val boardScroll = ScrollView(this).apply {
+            isFillViewport = false
+            isVerticalScrollBarEnabled = true
+            contentDescription = "میز بازی قابل پیمایش"
+        }
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(8), dp(4), dp(8), dp(8))
+        }
+        boardScroll.addView(root, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        mainColumn.addView(boardScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        val handDock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = roundedDrawable(panelColor, gold, 1)
+            setPadding(dp(6), dp(3), dp(6), dp(4))
+        }
+        ownHandTitle = label("کارت‌های ذخیره‌شدهٔ تو", 13f).apply {
+            setTextColor(gold)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(4), 0, dp(4), dp(2))
+        }
+        handDock.addView(ownHandTitle)
+        val ownHandScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            contentDescription = "کارت‌های خود بازیکن که همیشه نمایش داده می‌شوند"
+        }
+        ownHandCardsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        ownHandScroll.addView(ownHandCardsRow)
+        handDock.addView(ownHandScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        mainColumn.addView(handDock, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(125)
+        ).apply { topMargin = dp(4) })
+
+        val sidebarWidth = if (resources.configuration.screenWidthDp >= 850) dp(245) else dp(198)
+        val sidebar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = roundedDrawable(panelColor, mutedGold, 1)
+            setPadding(dp(6), dp(5), dp(6), dp(5))
+        }
+        contentRow.addView(sidebar, LinearLayout.LayoutParams(
+            sidebarWidth, ViewGroup.LayoutParams.MATCH_PARENT
+        ).apply { marginStart = dp(6) })
+
+        sidebar.addView(label("بازیکنان و ربات‌ها", 15f).apply {
+            gravity = Gravity.CENTER
+            setTextColor(gold)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        val playerListScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = true
+            contentDescription = "فهرست بازیکنان؛ برای دیدن کارت‌ها لمس کنید"
+        }
+        playerListColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        playerListScroll.addView(playerListColumn, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        sidebar.addView(playerListScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
+        selectedPlayerCardsTitle = label("کارت‌های بازیکن", 12f).apply {
+            gravity = Gravity.CENTER
+            setTextColor(gold)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(2), dp(3), dp(2), dp(2))
+        }
+        sidebar.addView(selectedPlayerCardsTitle)
+        val selectedCardsScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            contentDescription = "کارت‌های بازیکن انتخاب‌شده"
+        }
+        selectedPlayerCardsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        selectedCardsScroll.addView(selectedPlayerCardsRow)
+        sidebar.addView(selectedCardsScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(88)
+        ))
+
+        if (!reducedMotion) {
+            screenRoot.alpha = 0f
+            screenRoot.translationY = dp(5).toFloat()
+            screenRoot.animate().alpha(1f).translationY(0f).setDuration(180)
+                .setInterpolator(DecelerateInterpolator()).start()
+        }
+        refreshOwnHand(game)
+        refreshPlayerSidebar(game)
+    }
+
+    private fun makeCardTile(card: CardDefinition, compact: Boolean): LinearLayout {
+        val cardWidth = if (compact) dp(54) else dp(70)
+        val artHeight = if (compact) dp(38) else dp(56)
+        val tile = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = roundedDrawable(cardColor(card.type), gold, 1)
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+            contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value}"
+        }
+        val imageId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
+        if (imageId != 0) {
+            tile.addView(ImageView(this).apply {
+                setImageResource(imageId)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                contentDescription = cardNameFa(card.type)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, artHeight))
+        } else {
+            tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, artHeight
+            ))
+        }
+        tile.addView(TextView(this).apply {
+            text = cardNameFa(card.type)
+            textSize = if (compact) 8f * textScale else 10f * textScale
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(15)))
+        tile.addView(TextView(this).apply {
+            text = card.value.toPersianDigits()
+            textSize = if (compact) 8f * textScale else 9f * textScale
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(13)))
+        tile.layoutParams = LinearLayout.LayoutParams(cardWidth,
+            if (compact) dp(70) else dp(90)).apply { marginEnd = dp(4) }
+        if (!reducedMotion) {
+            tile.alpha = 0f
+            tile.scaleX = 0.88f
+            tile.scaleY = 0.88f
+            tile.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(230)
+                .setInterpolator(DecelerateInterpolator()).start()
+        }
+        return tile
+    }
+
+    private fun refreshOwnHand(game: GameState) {
+        val player = game.players.firstOrNull() ?: return
+        ownHandTitle?.text = "کارت‌های تو  •  ${player.bank.size.toPersianDigits()}"
+        val row = ownHandCardsRow ?: return
+        row.removeAllViews()
+        if (player.bank.isEmpty()) {
+            row.addView(label("هنوز کارتی ذخیره نکرده‌ای؛ پس از جمع‌کردن گنج، کارت‌ها اینجا می‌مانند.", 12f))
+        } else {
+            player.bank.forEach { row.addView(makeCardTile(it, compact = false)) }
+        }
+    }
+
+    private fun refreshPlayerSidebar(game: GameState) {
+        val list = playerListColumn ?: return
+        if (game.players.none { it.id == selectedPlayerId }) selectedPlayerId = 0
+        list.removeAllViews()
+        game.players.forEach { player ->
+            val selected = player.id == selectedPlayerId
+            val active = player.id == game.currentPlayer
+            val robot = !player.isHuman
+            val prefix = when {
+                robot && active && aiSequenceRunning -> "🤖 ▶"
+                robot -> "🤖"
+                player.id == 0 -> captainAvatar
+                else -> "👤"
+            }
+            val entry = TextView(this).apply {
+                text = "$prefix  ${player.name}\n${if (robot) "ربات" else "بازیکن"}  •  ${player.bank.size.toPersianDigits()} کارت  •  ${engine.scoreFor(player).toPersianDigits()} امتیاز"
+                textSize = 11f * textScale
+                setTextColor(if (active) gold else Color.WHITE)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(7), dp(3), dp(7), dp(3))
+                minHeight = dp(47)
+                background = roundedDrawable(
+                    when {
+                        active -> Color.rgb(68, 63, 35)
+                        selected -> mutedGold
+                        else -> navy
+                    },
+                    if (active) gold else if (selected) gold else mutedGold,
+                    if (active || selected) 2 else 1
+                )
+                isClickable = true
+                isFocusable = true
+                contentDescription = "نمایش کارت‌های ${player.name}"
+                setOnClickListener {
+                    selectedPlayerId = player.id
+                    refreshPlayerSidebar(game)
+                }
+            }
+            list.addView(entry, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(4) })
+            if (active && robot && aiSequenceRunning && !reducedMotion) {
+                entry.animate().scaleX(1.025f).scaleY(1.025f).setDuration(280)
+                    .withEndAction {
+                        if (entry.parent != null) entry.animate().scaleX(1f).scaleY(1f).setDuration(280).start()
+                    }.start()
+            }
+        }
+        refreshSelectedPlayerHand(game)
+    }
+
+    private fun refreshSelectedPlayerHand(game: GameState) {
+        val player = game.players.firstOrNull { it.id == selectedPlayerId } ?: game.players.firstOrNull() ?: return
+        selectedPlayerCardsTitle?.text = "کارت‌های ${player.name}  •  ${player.bank.size.toPersianDigits()}"
+        val row = selectedPlayerCardsRow ?: return
+        row.removeAllViews()
+        if (player.bank.isEmpty()) {
+            row.addView(label("بدون کارت ذخیره‌شده", 11f))
+        } else {
+            player.bank.forEach { row.addView(makeCardTile(it, compact = true)) }
+        }
     }
 
     private fun label(text: String, size: Float = 16f): TextView = TextView(this).apply {
@@ -287,7 +599,9 @@ class MainActivity : Activity() {
             val saved = state ?: loadSavedGame()
             if (saved != null && !saved.finished) {
                 state = saved
-                if (saved.players.firstOrNull()?.trait == null) chooseTrait() else renderGame()
+                if (saved.players.firstOrNull()?.trait == null && saved.currentPlayer == 0) chooseTrait()
+                else if (!saved.passAndPlay && saved.currentPlayer != 0) beginAiSequence(saved)
+                else renderGame()
             } else showSetup()
         }
         button("بازی گروهی") { showSetup(groupMode = true) }
@@ -612,12 +926,20 @@ class MainActivity : Activity() {
 
     private fun renderGame() {
         val game = state ?: return
-        base("دزدان دریایی")
+        baseLandscapeGame("دزدان دریایی", game)
+        val active = game.players[game.currentPlayer]
         status = panel(game.message, 16f).apply {
             gravity = Gravity.CENTER_VERTICAL
             setTextColor(if (game.message.contains("Bust!", ignoreCase = true)) Color.rgb(255, 142, 112) else gold)
         }
         root.addView(status)
+        if (aiSequenceRunning && !game.passAndPlay && !active.isHuman) {
+            root.addView(panel("🤖  ${active.name} در حال بازی است؛ حرکت‌ها یکی‌یکی نمایش داده می‌شوند.", 15f))
+            root.addView(ProgressBar(this).apply {
+                isIndeterminate = true
+                contentDescription = "ربات در حال فکر کردن"
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(5)))
+        }
         if (!reducedMotion) {
             if (game.message.contains("Bust!", ignoreCase = true)) {
                 status.startAnimation(TranslateAnimation(-dp(7).toFloat(), dp(7).toFloat(), 0f, 0f).apply {
@@ -662,7 +984,6 @@ class MainActivity : Activity() {
         root.addView(deckRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(8) })
-        val active = game.players[game.currentPlayer]
         root.addView(panel("نوبت ${game.turnNumber.toPersianDigits()}: ${active.name}", 18f))
         root.addView(label("توانایی: ${active.trait?.let { traitNameFa(it) } ?: "انتخاب نشده"}", 14f))
         if (game.pendingForcedDraws > 0) {
@@ -785,7 +1106,11 @@ class MainActivity : Activity() {
             return
         }
 
-        if (game.pendingEffect != null) {
+        val robotTurn = aiSequenceRunning && !game.passAndPlay && !active.isHuman
+        if (robotTurn) {
+            root.addView(panel("نوبت ربات: ${active.name}", 18f))
+            root.addView(label("تماشا کن؛ کارت‌برداشتن، استفاده از توانایی‌ها و جمع‌کردن گنج به‌ترتیب اجرا می‌شوند.", 13f))
+        } else if (game.pendingEffect != null) {
             showEffectControls(game)
         } else {
             button("برداشتن کارت") {
@@ -794,9 +1119,9 @@ class MainActivity : Activity() {
             }
             button("جمع کردن کارت‌ها / پایان نوبت") { confirmCollect(game) }
         }
-        button("گزارش کامل بازی") { showTurnLog(game) }
-        button("راهنمای کارت‌ها") { showCardGlossary() }
-        button("راهنمای توانایی") {
+        if (!robotTurn) button("گزارش کامل بازی") { showTurnLog(game) }
+        if (!robotTurn) button("راهنمای کارت‌ها") { showCardGlossary() }
+        if (!robotTurn) button("راهنمای توانایی") {
             base("راهنمای توانایی")
             root.addView(panel(active.trait?.let { traitNameFa(it) } ?: "انتخاب نشده", 18f))
             root.addView(label(active.trait?.description ?: "No trait selected."))
@@ -806,7 +1131,13 @@ class MainActivity : Activity() {
             }
             button("بازگشت به میز بازی") { renderGame() }
         }
-        button("منوی اصلی") { showMainMenu() }
+        button("منوی اصلی") {
+            aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+            aiSequenceRunning = false
+            restartAiWhenResumed = false
+            saveGame(game)
+            showMainMenu()
+        }
         saveGame(game)
     }
 
@@ -913,10 +1244,83 @@ class MainActivity : Activity() {
     }
 
     private fun finishPlayerAction(game: GameState) {
-        if (!game.passAndPlay && game.currentPlayer != 0 && !game.finished) engine.playAiTurnsUntilHuman(game)
         if (game.finished) trackFinishedGame(game)
         if (game.finished) deleteSavedGame() else saveGame(game)
+        if (!game.finished && !game.passAndPlay && game.currentPlayer != 0) {
+            beginAiSequence(game)
+        } else {
+            aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+            aiSequenceRunning = false
+            aiDrawsThisTurn = 0
+            aiActionCount = 0
+            renderGame()
+        }
+    }
+
+    private fun beginAiSequence(game: GameState) {
+        if (game.finished || game.passAndPlay || game.currentPlayer == 0) {
+            aiSequenceRunning = false
+            renderGame()
+            return
+        }
+        if (!aiSequenceRunning) {
+            aiSequenceRunning = true
+            aiDrawsThisTurn = 0
+            aiActionCount = 0
+        }
         renderGame()
+        scheduleNextAiAction(game, 850L)
+    }
+
+    private fun scheduleNextAiAction(game: GameState, delayMs: Long) {
+        aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+        val next = Runnable {
+            if (state !== game) {
+                aiSequenceRunning = false
+                return@Runnable
+            }
+            if (game.finished || game.passAndPlay || game.currentPlayer == 0) {
+                aiSequenceRunning = false
+                aiDrawsThisTurn = 0
+                aiActionCount = 0
+                if (game.finished) {
+                    trackFinishedGame(game)
+                    deleteSavedGame()
+                } else saveGame(game)
+                renderGame()
+                return@Runnable
+            }
+            if (aiActionCount >= 240) {
+                aiSequenceRunning = false
+                game.message = "بازی ربات‌ها متوقف شد تا از حلقهٔ بی‌نهایت جلوگیری شود."
+                saveGame(game)
+                renderGame()
+                return@Runnable
+            }
+
+            val playerBefore = game.currentPlayer
+            aiDrawsThisTurn = engine.playAiStep(game, aiDrawsThisTurn)
+            aiActionCount++
+            if (game.currentPlayer != playerBefore || game.finished) aiDrawsThisTurn = 0
+
+            if (game.finished) {
+                trackFinishedGame(game)
+                deleteSavedGame()
+            } else saveGame(game)
+            renderGame()
+
+            if (!game.finished && !game.passAndPlay && game.currentPlayer != 0) {
+                val delay = if (game.pendingEffect != null) 620L else 850L
+                scheduleNextAiAction(game, delay)
+            } else {
+                aiSequenceRunning = false
+                aiDrawsThisTurn = 0
+                aiActionCount = 0
+                renderGame()
+            }
+        }
+        aiStepRunnable = next
+        mainHandler.postDelayed(next, delayMs)
     }
 
     private fun confirmCollect(game: GameState) {
