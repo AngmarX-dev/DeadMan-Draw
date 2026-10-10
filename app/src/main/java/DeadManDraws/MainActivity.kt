@@ -512,9 +512,12 @@ class MainActivity : Activity() {
     }
 
     private fun refreshOwnHand(game: GameState) {
-        val player = game.players.getOrNull(game.currentPlayer) ?: return
+        // In solo mode always show the human captain's bank, even while a robot is taking its turn.
+        // In pass-and-play, the bottom dock follows the person whose turn is active.
+        val player = if (game.passAndPlay) game.players.getOrNull(game.currentPlayer) else game.players.firstOrNull()
+        if (player == null) return
         val hookPending = game.pendingEffect?.cardType == CardType.HOOK &&
-            game.pendingEffect?.playerIndex == game.currentPlayer
+            game.pendingEffect?.playerIndex == player.id
         ownHandTitle?.text = if (hookPending) {
             "قلاب: کارت انتخاب کن • عنوان را نگه‌دار (${selectedHookIds.size})"
         } else {
