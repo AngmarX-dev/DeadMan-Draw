@@ -1,0 +1,73 @@
+Source archive: Images.rar
+Files extracted to assets: 69
+Raster images copied to drawable-nodpi: 34
+
+    751962 bytes  Images/01.jpg
+      3407 bytes  Images/01.jpg.meta
+    528387 bytes  Images/Anchor.png
+      3306 bytes  Images/Anchor.png.meta
+    261658 bytes  Images/BackCart.png
+      3309 bytes  Images/BackCart.png.meta
+    244388 bytes  Images/BackCartBurn.png
+      3324 bytes  Images/BackCartBurn.png.meta
+    499456 bytes  Images/Cannon.png
+      3306 bytes  Images/Cannon.png.meta
+    501253 bytes  Images/Chest .png
+      3303 bytes  Images/Chest .png.meta
+    219545 bytes  Images/GameBoarR.jpg
+      3314 bytes  Images/GameBoarR.jpg.meta
+    528147 bytes  Images/Hook.png
+      3300 bytes  Images/Hook.png.meta
+    518779 bytes  Images/Key.png
+      3294 bytes  Images/Key.png.meta
+    563920 bytes  Images/Kraken.png
+      3306 bytes  Images/Kraken.png.meta
+    468392 bytes  Images/Map.png
+      3291 bytes  Images/Map.png.meta
+    493016 bytes  Images/Mermaid.png
+      3309 bytes  Images/Mermaid.png.meta
+    546302 bytes  Images/Oracle.png
+      3303 bytes  Images/Oracle.png.meta
+     48437 bytes  Images/Small1.png
+      3308 bytes  Images/Small1.png.meta
+     53616 bytes  Images/Small4.png
+      3308 bytes  Images/Small4.png.meta
+    499322 bytes  Images/Sword.png
+      3297 bytes  Images/Sword.png.meta
+    217422 bytes  Images/Traits/Beastmaster.png
+      3321 bytes  Images/Traits/Beastmaster.png.meta
+    144233 bytes  Images/Traits/Captain's Hook.png
+      3330 bytes  Images/Traits/Captain's Hook.png.meta
+    209153 bytes  Images/Traits/Casanova.png
+      3309 bytes  Images/Traits/Casanova.png.meta
+    221888 bytes  Images/Traits/Davy Jones' Locker.png
+      3339 bytes  Images/Traits/Davy Jones' Locker.png.meta
+    216071 bytes  Images/Traits/Fisherman.png
+      3312 bytes  Images/Traits/Fisherman.png.meta
+    226979 bytes  Images/Traits/Golden Scales.png
+      3327 bytes  Images/Traits/Golden Scales.png.meta
+    144548 bytes  Images/Traits/Master Gunner.png
+      3327 bytes  Images/Traits/Master Gunner.png.meta
+    155063 bytes  Images/Traits/Miser.png
+      3300 bytes  Images/Traits/Miser.png.meta
+    152546 bytes  Images/Traits/Misfire.png
+      3306 bytes  Images/Traits/Misfire.png.meta
+    152376 bytes  Images/Traits/Mystic.png
+      3303 bytes  Images/Traits/Mystic.png.meta
+    147571 bytes  Images/Traits/Navigator.png
+      3312 bytes  Images/Traits/Navigator.png.meta
+    143881 bytes  Images/Traits/Parry.png
+      3303 bytes  Images/Traits/Parry.png.meta
+    145908 bytes  Images/Traits/Plunderer.png
+      3315 bytes  Images/Traits/Plunderer.png.meta
+    149209 bytes  Images/Traits/Safe Harbor.png
+      3318 bytes  Images/Traits/Safe Harbor.png.meta
+    225367 bytes  Images/Traits/Scavenger.png
+      3315 bytes  Images/Traits/Scavenger.png.meta
+    210669 bytes  Images/Traits/Swordsman.png
+      3312 bytes  Images/Traits/Swordsman.png.meta
+    230282 bytes  Images/Traits/Treasure Hunter.png
+      3333 bytes  Images/Traits/Treasure Hunter.png.meta
+       172 bytes  Images/Traits.meta
+     35919 bytes  Images/UpPanel.png
+      3306 bytes  Images/UpPanel.png.meta
