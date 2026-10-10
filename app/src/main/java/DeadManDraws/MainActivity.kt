@@ -81,6 +81,12 @@ class MainActivity : Activity() {
     private var selectedPlayerCardsRow: LinearLayout? = null
     private var ownHandTitle: TextView? = null
     private var ownHandCardsRow: LinearLayout? = null
+    private var drawDeckControl: LinearLayout? = null
+    private var burnDeckControl: LinearLayout? = null
+    private var drawDeckCountLabel: TextView? = null
+    private var burnDeckCountLabel: TextView? = null
+    private var drawAnimationRunning = false
+    private var landscapeScreenRoot: LinearLayout? = null
 
     private var navy = Color.rgb(13, 27, 35)
     private var panelColor = Color.rgb(24, 43, 52)
@@ -295,6 +301,73 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
+        val deckDock = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = roundedDrawable(panelColor, mutedGold, 1)
+            setPadding(dp(5), dp(3), dp(5), dp(2))
+        }
+        val deckRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+        }
+        fun createDeckPile(drawableName: String, title: String, description: String, isDrawPile: Boolean): LinearLayout {
+            val pile = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                gravity = Gravity.CENTER
+                background = roundedDrawable(navy, mutedGold, 1)
+                setPadding(dp(5), dp(2), dp(5), dp(2))
+                isClickable = true
+                isFocusable = true
+                contentDescription = description
+            }
+            val imageId = resources.getIdentifier(drawableName, "drawable", packageName)
+            if (imageId != 0) {
+                pile.addView(ImageView(this).apply {
+                    setImageResource(imageId)
+                    setColorFilter(cardBackColors[selectedCardBack])
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = description
+                }, LinearLayout.LayoutParams(dp(46), dp(62)).apply { marginEnd = dp(7) })
+            }
+            val info = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            info.addView(label(title, 13f).apply {
+                setTextColor(gold)
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            val counter = label("۰", 17f).apply {
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            info.addView(counter)
+            pile.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (isDrawPile) {
+                drawDeckCountLabel = counter
+                pile.setOnClickListener { onDrawDeckTapped(game) }
+                pile.setOnLongClickListener { onDrawDeckLongPressed(game) }
+            } else {
+                burnDeckCountLabel = counter
+                pile.setOnClickListener { onBurnDeckTapped(game) }
+            }
+            deckRow.addView(pile, LinearLayout.LayoutParams(0, dp(70), 1f).apply { marginEnd = dp(5) })
+            return pile
+        }
+        drawDeckControl = createDeckPile("backcart", "دستهٔ کارت", "لمس: برداشتن کارت؛ نگه‌داشتن: جمع‌کردن گنج", true)
+        burnDeckControl = createDeckPile("backcartburn", "کارت‌های سوخته", "برای بازیابی نقشه، دستهٔ سوخته را لمس کنید", false)
+        deckDock.addView(deckRow)
+        deckDock.addView(label("لمس دستهٔ کارت: برداشتن کارت  •  نگه‌داشتن: جمع‌کردن گنج", 10f).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 0)
+            setTextColor(Color.LTGRAY)
+        })
+        mainColumn.addView(deckDock, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(96)
+        ).apply { topMargin = dp(3) })
+
         val handDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -384,6 +457,8 @@ class MainActivity : Activity() {
             screenRoot.animate().alpha(1f).translationY(0f).setDuration(180)
                 .setInterpolator(DecelerateInterpolator()).start()
         }
+        landscapeScreenRoot = screenRoot
+        refreshDeckDock(game)
         refreshOwnHand(game)
         refreshPlayerSidebar(game)
     }
