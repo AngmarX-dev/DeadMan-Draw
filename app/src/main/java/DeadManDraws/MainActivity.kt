@@ -486,13 +486,7 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(13)))
         tile.layoutParams = LinearLayout.LayoutParams(cardWidth,
             if (compact) dp(70) else dp(90)).apply { marginEnd = dp(4) }
-        if (!reducedMotion) {
-            tile.alpha = 0f
-            tile.scaleX = 0.88f
-            tile.scaleY = 0.88f
-            tile.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(230)
-                .setInterpolator(DecelerateInterpolator()).start()
-        }
+        // Keep already-banked cards still when the screen is rebuilt; only new table cards reveal-animate.
         return tile
     }
 
@@ -689,11 +683,11 @@ class MainActivity : Activity() {
         cardBack.translationY = 0f
         cardBack.animate().rotationY(82f).translationY(-dp(7).toFloat())
             .scaleX(0.93f).scaleY(0.93f).setDuration(115)
-            .withInterpolator(DecelerateInterpolator())
+            .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 cardBack.animate().rotationY(0f).translationY(0f)
                     .scaleX(1f).scaleY(1f).setDuration(135)
-                    .withInterpolator(DecelerateInterpolator())
+                    .setInterpolator(DecelerateInterpolator())
                     .withEndAction { onFinished() }.start()
             }.start()
     }
