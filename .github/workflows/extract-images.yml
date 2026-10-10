@@ -1,0 +1,142 @@
+name: Extract Android Image Assets
+
+on:
+  push:
+    branches:
+      - main
+      - chore/extract-images-archive
+    paths:
+      - Images.rar
+      - .github/workflows/extract-images.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    name: Extract Images.rar into Android resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install RAR extraction tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y 7zip
+          SEVENZIP=""
+          for candidate in /usr/bin/7zz /usr/bin/7z /usr/bin/7zzs /usr/lib/7zip/7zz /usr/lib/7zip/7z /usr/lib/7zip/7zzs; do
+            if [ -x "$candidate" ]; then
+              SEVENZIP="$candidate"
+              break
+            fi
+          done
+          if [ -z "$SEVENZIP" ]; then
+            SEVENZIP="$(find /usr -type f -executable \( -name '7zz' -o -name '7z' -o -name '7zzs' \) -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$SEVENZIP" ] || [ ! -x "$SEVENZIP" ]; then
+            echo "Could not locate a 7-Zip executable." >&2
+            dpkg -L 7zip || true
+            exit 1
+          fi
+          echo "SEVENZIP=$SEVENZIP" >> "$GITHUB_ENV"
+          echo "Using extraction tool at $SEVENZIP"
+
+      - name: Extract and classify images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/dead-man-draw-images
+          "$SEVENZIP" x Images.rar -o/tmp/dead-man-draw-images -y
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import re
+          import shutil
+          import unicodedata
+
+          source = Path("/tmp/dead-man-draw-images")
+          assets = Path("app/src/main/assets/images")
+          drawables = Path("app/src/main/res/drawable-nodpi")
+          assets.mkdir(parents=True, exist_ok=True)
+          drawables.mkdir(parents=True, exist_ok=True)
+
+          ignored_parts = {"__MACOSX", ".git", ".svn"}
+          image_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+          used_drawable_names = set()
+          extracted = []
+          drawable_count = 0
+
+          def safe_resource_stem(path):
+              value = unicodedata.normalize("NFKD", path.stem).encode("ascii", "ignore").decode("ascii")
+              value = re.sub(r"[^a-zA-Z0-9_]+", "_", value).strip("_").lower()
+              value = re.sub(r"_+", "_", value)
+              if not value or not value[0].isalpha():
+                  value = "image_" + value
+              return value[:72]
+
+          # Remove obsolete Unity importer metadata from Android assets before refreshing.
+          for metadata in assets.rglob("*.meta"):
+              metadata.unlink()
+
+          for file in sorted(source.rglob("*")):
+              if not file.is_file() or file.suffix.lower() == ".meta":
+                  continue
+              relative = file.relative_to(source)
+              if any(part in ignored_parts or part.startswith(".") for part in relative.parts):
+                  continue
+              target = assets / relative
+              target.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(file, target)
+              extracted.append((relative.as_posix(), file.stat().st_size))
+
+              ext = file.suffix.lower()
+              if ext not in image_extensions:
+                  continue
+              stem = safe_resource_stem(file)
+              drawable_ext = ".jpg" if ext == ".jpeg" else ext
+              candidate = stem
+              if candidate in used_drawable_names:
+                  digest = hashlib.sha256(relative.as_posix().encode("utf-8")).hexdigest()[:8]
+                  candidate = stem[:62] + "_" + digest
+              while candidate in used_drawable_names:
+                  candidate += "_x"
+              used_drawable_names.add(candidate)
+              shutil.copy2(file, drawables / (candidate + drawable_ext))
+              drawable_count += 1
+
+          report = Path("app/src/main/assets/images/EXTRACTION_MANIFEST.txt")
+          report.write_text(
+              "Source archive: Images.rar\n"
+              f"Files extracted to assets: {len(extracted)}\n"
+              f"Raster images copied to drawable-nodpi: {drawable_count}\n\n"
+              + "".join(f"{size:>10} bytes  {name}\n" for name, size in extracted),
+              encoding="utf-8"
+          )
+          print(f"EXTRACTED_FILES={len(extracted)}")
+          print(f"ANDROID_DRAWABLES={drawable_count}")
+          print("Extracted archive contents:")
+          for name, size in extracted:
+              print(f"{size:>10} bytes  {name}")
+          PY
+
+      - name: Commit extracted assets to this branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/images app/src/main/res/drawable-nodpi
+          if git diff --cached --quiet; then
+            echo "No extracted asset changes to commit."
+            exit 0
+          fi
+          git commit -m "Extract Images.rar into Android assets and drawables"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

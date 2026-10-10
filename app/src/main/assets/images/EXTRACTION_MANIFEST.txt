@@ -1,0 +1,38 @@
+Source archive: Images.rar
+Files extracted to assets: 34
+Raster images copied to drawable-nodpi: 34
+
+    751962 bytes  Images/01.jpg
+    528387 bytes  Images/Anchor.png
+    261658 bytes  Images/BackCart.png
+    244388 bytes  Images/BackCartBurn.png
+    499456 bytes  Images/Cannon.png
+    501253 bytes  Images/Chest .png
+    219545 bytes  Images/GameBoarR.jpg
+    528147 bytes  Images/Hook.png
+    518779 bytes  Images/Key.png
+    563920 bytes  Images/Kraken.png
+    468392 bytes  Images/Map.png
+    493016 bytes  Images/Mermaid.png
+    546302 bytes  Images/Oracle.png
+     48437 bytes  Images/Small1.png
+     53616 bytes  Images/Small4.png
+    499322 bytes  Images/Sword.png
+    217422 bytes  Images/Traits/Beastmaster.png
+    144233 bytes  Images/Traits/Captain's Hook.png
+    209153 bytes  Images/Traits/Casanova.png
+    221888 bytes  Images/Traits/Davy Jones' Locker.png
+    216071 bytes  Images/Traits/Fisherman.png
+    226979 bytes  Images/Traits/Golden Scales.png
+    144548 bytes  Images/Traits/Master Gunner.png
+    155063 bytes  Images/Traits/Miser.png
+    152546 bytes  Images/Traits/Misfire.png
+    152376 bytes  Images/Traits/Mystic.png
+    147571 bytes  Images/Traits/Navigator.png
+    143881 bytes  Images/Traits/Parry.png
+    145908 bytes  Images/Traits/Plunderer.png
+    149209 bytes  Images/Traits/Safe Harbor.png
+    225367 bytes  Images/Traits/Scavenger.png
+    210669 bytes  Images/Traits/Swordsman.png
+    230282 bytes  Images/Traits/Treasure Hunter.png
+     35919 bytes  Images/UpPanel.png
