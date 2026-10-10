@@ -121,7 +121,11 @@ class MainActivity : Activity() {
             AlertDialog.Builder(this)
                 .setTitle("ادامهٔ بازی؟")
                 .setMessage("یک بازی ناتمام ذخیره شده است. ادامه می‌دهید یا بازی تازه‌ای شروع می‌کنید؟")
-                .setPositiveButton("ادامه") { _, _ -> if (saved.players.firstOrNull()?.trait == null) chooseTrait() else renderGame() }
+                .setPositiveButton("ادامه") { _, _ ->
+                    if (saved.players.firstOrNull()?.trait == null && saved.currentPlayer == 0) chooseTrait()
+                    else if (!saved.passAndPlay && saved.currentPlayer != 0) beginAiSequence(saved)
+                    else renderGame()
+                }
                 .setNegativeButton("بازی جدید") { _, _ ->
                     state = null
                     deleteSavedGame()
@@ -595,7 +599,9 @@ class MainActivity : Activity() {
             val saved = state ?: loadSavedGame()
             if (saved != null && !saved.finished) {
                 state = saved
-                if (saved.players.firstOrNull()?.trait == null) chooseTrait() else renderGame()
+                if (saved.players.firstOrNull()?.trait == null && saved.currentPlayer == 0) chooseTrait()
+                else if (!saved.passAndPlay && saved.currentPlayer != 0) beginAiSequence(saved)
+                else renderGame()
             } else showSetup()
         }
         button("بازی گروهی") { showSetup(groupMode = true) }
@@ -1125,7 +1131,13 @@ class MainActivity : Activity() {
             }
             button("بازگشت به میز بازی") { renderGame() }
         }
-        button("منوی اصلی") { showMainMenu() }
+        button("منوی اصلی") {
+            aiStepRunnable?.let { mainHandler.removeCallbacks(it) }
+            aiSequenceRunning = false
+            restartAiWhenResumed = false
+            saveGame(game)
+            showMainMenu()
+        }
         saveGame(game)
     }
 
