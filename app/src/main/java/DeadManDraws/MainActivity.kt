@@ -590,16 +590,16 @@ class MainActivity : Activity() {
             ).apply { bottomMargin = dp(10) })
         }
         button("مشاهدهٔ همهٔ توانایی‌ها") {
-            base("PIRATE TRAIT GUIDE")
+            base("راهنمای توانایی‌های دزدان دریایی")
             TraitType.entries.forEach { root.addView(panel("${it.displayName}\n${it.description}", 14f)) }
-            button("BACK TO TRAIT CHOICE") { chooseTrait() }
+            button("بازگشت به انتخاب توانایی") { chooseTrait() }
         }
     }
 
     private fun chooseDavyJonesTarget(game: GameState) {
         val rivals = game.players.filter { it.id != 0 }
         AlertDialog.Builder(this)
-            .setTitle("Choose a rival")
+            .setTitle("انتخاب حریف")
             .setItems(rivals.map { it.name }.toTypedArray()) { _, which ->
                 engine.setDavyJonesTarget(game, 0, rivals[which].id)
                 renderGame()
@@ -662,7 +662,7 @@ class MainActivity : Activity() {
         ).apply { bottomMargin = dp(8) })
         val active = game.players[game.currentPlayer]
         root.addView(panel("نوبت ${game.turnNumber.toPersianDigits()}: ${active.name}", 18f))
-        root.addView(label("توانایی: ${active.trait?.displayName ?: "انتخاب نشده"}", 14f))
+        root.addView(label("توانایی: ${active.trait?.let { traitNameFa(it) } ?: "انتخاب نشده"}", 14f))
         if (game.pendingForcedDraws > 0) {
             root.addView(panel("فشار کراکن: ${game.pendingForcedDraws.toPersianDigits()} کارت اجباری باقی مانده", 14f))
         }
@@ -700,7 +700,7 @@ class MainActivity : Activity() {
                     ).apply { topMargin = dp(4) })
                 }
                 tile.addView(TextView(this).apply {
-                    text = card.type.displayName.uppercase()
+                    text = cardNameFa(card.type)
                     textSize = 11f * textScale
                     gravity = Gravity.CENTER
                     typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
@@ -758,7 +758,7 @@ class MainActivity : Activity() {
         root.addView(label("وضعیت بازیکنان", 17f))
         root.addView(panel(game.players.joinToString("\n") { player ->
             "${if (player.id == 0) captainAvatar else avatars[player.id % avatars.size]} ${player.name} — ${player.bank.size.toPersianDigits()} کارت — ${engine.scoreFor(player).toPersianDigits()} امتیاز" +
-                (player.trait?.let { "  •  ${it.displayName}" } ?: "")
+                (player.trait?.let { "  •  ${traitNameFa(it)}" } ?: "")
         }, 14f))
 
         val currentBank = active.bank.groupingBy { it.type }.eachCount().entries
@@ -796,7 +796,7 @@ class MainActivity : Activity() {
         button("راهنمای کارت‌ها") { showCardGlossary() }
         button("راهنمای توانایی") {
             base("راهنمای توانایی")
-            root.addView(panel(active.trait?.displayName ?: "No trait selected", 18f))
+            root.addView(panel(active.trait?.let { traitNameFa(it) } ?: "انتخاب نشده", 18f))
             root.addView(label(active.trait?.description ?: "No trait selected."))
             if (active.trait == TraitType.DAVY_JONES_LOCKER) {
                 val target = game.davyJonesTargets[active.id]?.let { game.players[it].name } ?: "No target"
@@ -811,37 +811,37 @@ class MainActivity : Activity() {
     private fun showEffectControls(game: GameState) {
         val effect = game.pendingEffect ?: return
         val player = game.players[game.currentPlayer]
-        root.addView(panel("SPECIAL CARD: ${effect.cardType.displayName}", 18f))
+        root.addView(panel("کارت ویژه: ${cardNameFa(effect.cardType)}", 18f))
         when (effect.cardType) {
             CardType.CANNON -> {
-                root.addView(label("Choose a rival and a banked card type to target.", 14f))
+                root.addView(label("حریف و نوع کارت ذخیره‌شده را برای هدف‌گیری انتخاب کنید.", 14f))
                 val targets = game.players.filter { it.id != player.id }
                 var foundTarget = false
                 targets.forEach { target ->
                     if (target.trait == TraitType.MISFIRE) {
                         foundTarget = true
-                        button("💣  ${target.name} — MISFIRE (burn top bank card)") {
+                        button("💣  ${target.name} — خطای توپ (سوزاندن کارت بالایی)") {
                             if (engine.resolveCannon(game, target.id)) finishPlayerAction(game)
                         }
                     } else {
                         target.bank.map { it.type }.distinct().forEach { type ->
                             foundTarget = true
-                            button("💣  ${target.name}: ${type.symbol} ${type.displayName}") {
+                            button("💣  ${target.name}: ${type.symbol} ${cardNameFa(type)}") {
                                 if (engine.resolveCannon(game, target.id, type)) finishPlayerAction(game)
                                 else renderGame()
                             }
                         }
                     }
                 }
-                if (!foundTarget) root.addView(label("No rival has a card to target. Skip this effect."))
+                if (!foundTarget) root.addView(label("هیچ حریفی کارت قابل هدف‌گیری ندارد؛ این اثر را رد کنید."))
             }
             CardType.HOOK -> {
                 val limit = if (player.trait == TraitType.CAPTAINS_HOOK) 2 else 1
-                root.addView(label("Select up to $limit banked card(s) with different types to return to the board.", 14f))
+                root.addView(label("تا $limit کارت از نوع‌های متفاوت را برای بازگرداندن به میز انتخاب کنید.", 14f))
                 player.bank.filter { card -> game.board.none { it.type == card.type } }.forEach { card ->
                     val checked = card.id in selectedHookIds
                     val toggle = checkbox(
-                        "${if (checked) "☑" else "☐"} ${card.type.symbol} ${card.type.displayName} — value ${card.value}",
+                        "${if (checked) "☑" else "☐"} ${card.type.symbol} ${cardNameFa(card.type)} — ارزش ${card.value.toPersianDigits()}",
                         checked
                     )
                     toggle.setOnCheckedChangeListener { _, isChecked ->
@@ -856,54 +856,54 @@ class MainActivity : Activity() {
                     }
                     root.addView(toggle)
                 }
-                button("🪝  RETURN SELECTED CARDS (${selectedHookIds.size}/$limit)") {
+                button("🪝 بازگرداندن کارت‌های انتخاب‌شده (${selectedHookIds.size}/$limit)") {
                     if (engine.resolveHook(game, selectedHookIds.toList())) {
                         selectedHookIds.clear()
                         finishPlayerAction(game)
                     } else {
-                        game.message = "Select no more than $limit different card type(s)."
+                        game.message = "حداکثر $limit کارت از نوع‌های متفاوت انتخاب کنید."
                         renderGame()
                     }
                 }
             }
             CardType.MAP -> {
                 if (player.trait == TraitType.NAVIGATOR) {
-                    root.addView(label("Navigator: choose any eligible card in the Burn Deck.", 14f))
+                    root.addView(label("ناوبر: هر کارت مجاز را از دستهٔ سوخته انتخاب کنید.", 14f))
                     game.burnDeck.filter { card -> game.board.none { it.type == card.type } }
                         .sortedByDescending { it.value }.forEach { card ->
-                            button("🗺  ${card.type.symbol} ${card.type.displayName} — ${card.value}") {
+                            button("🗺  ${card.type.symbol} ${cardNameFa(card.type)} — ${card.value.toPersianDigits()}") {
                                 if (engine.resolveMap(game, card.id)) finishPlayerAction(game)
                                 else renderGame()
                             }
                         }
                 } else {
                     val top = game.burnDeck.firstOrNull()
-                    if (top == null) root.addView(label("The Burn Deck is empty."))
-                    else root.addView(panel("Map's top Burn Deck card: ${top.type.symbol} ${top.type.displayName} — ${top.value}", 15f))
-                    button("🗺  RECOVER TOP BURN CARD") {
+                    if (top == null) root.addView(label("دستهٔ کارت‌های سوخته خالی است."))
+                    else root.addView(panel("کارت بالایی دستهٔ سوخته: ${top.type.symbol} ${cardNameFa(top.type)} — ${top.value.toPersianDigits()}", 15f))
+                    button("🗺 برداشتن کارت بالایی از دستهٔ سوخته") {
                         if (engine.resolveMap(game)) finishPlayerAction(game) else renderGame()
                     }
                 }
             }
             CardType.SWORD -> {
-                root.addView(label("Choose an eligible banked card to steal from a rival.", 14f))
+                root.addView(label("یک کارت مجاز را برای دزدیدن از حریف انتخاب کنید.", 14f))
                 var found = false
                 game.players.filter { it.id != player.id }.forEach { target ->
                     target.bank.filter { card ->
                         player.trait == TraitType.SWORDSMAN || player.bank.none { it.type == card.type }
                     }.forEach { card ->
                         found = true
-                        button("⚔  ${target.name}: ${card.type.symbol} ${card.type.displayName}") {
+                        button("⚔  ${target.name}: ${card.type.symbol} ${cardNameFa(card.type)}") {
                             if (engine.resolveSword(game, target.id, card.id)) finishPlayerAction(game)
                             else renderGame()
                         }
                     }
                 }
-                if (!found) root.addView(label("No rival has an eligible card. Skip this effect."))
+                if (!found) root.addView(label("هیچ حریفی کارت مجاز ندارد؛ این اثر را رد کنید."))
             }
             else -> Unit
         }
-        button("SKIP SPECIAL EFFECT") {
+        button("رد کردن اثر کارت ویژه") {
             engine.skipPendingEffect(game)
             selectedHookIds.clear()
             finishPlayerAction(game)
@@ -920,10 +920,10 @@ class MainActivity : Activity() {
     private fun confirmCollect(game: GameState) {
         if (game.board.size >= 3) {
             AlertDialog.Builder(this)
-                .setTitle("Collect this haul?")
-                .setMessage("You are about to bank ${game.board.size} card(s). Collecting ends your turn.")
-                .setNegativeButton("KEEP DRAWING", null)
-                .setPositiveButton("COLLECT") { _, _ -> collectAfterConfirmation(game) }
+                .setTitle("کارت‌ها جمع شوند؟")
+                .setMessage("شما ${game.board.size.toPersianDigits()} کارت ذخیره می‌کنید. جمع کردن کارت‌ها نوبت را پایان می‌دهد.")
+                .setNegativeButton("ادامهٔ کارت‌برداشتن", null)
+                .setPositiveButton("جمع کردن") { _, _ -> collectAfterConfirmation(game) }
                 .show()
         } else collectAfterConfirmation(game)
     }
@@ -936,11 +936,11 @@ class MainActivity : Activity() {
             val rivals = game.players.filter { it.id != active.id && it.bank.isNotEmpty() }
             if (rivals.isNotEmpty()) {
                 AlertDialog.Builder(this)
-                    .setTitle("Plunder the bonus")
-                    .setItems(rivals.map { "${it.name} — ${it.bank.size} banked card(s)" }.toTypedArray()) { _, which ->
+                    .setTitle("غارت جایزه")
+                    .setItems(rivals.map { "${it.name} — ${it.bank.size.toPersianDigits()} کارت ذخیره‌شده" }.toTypedArray()) { _, which ->
                         if (engine.collect(game, rivals[which].id)) finishPlayerAction(game)
                     }
-                    .setNegativeButton("CANCEL", null)
+                    .setNegativeButton("لغو", null)
                     .show()
                 return
             }
@@ -951,17 +951,17 @@ class MainActivity : Activity() {
     private fun showHowToPlay() {
         base("راهنما")
         root.addView(panel("۱. کارت بردارید", 17f))
-        root.addView(label("Draw cards to grow the board. A duplicate type normally burns the unprotected board."))
+        root.addView(label("کارت بردارید تا میز گنج بزرگ‌تر شود. تکرار یک نوع کارت معمولاً کارت‌های محافظت‌نشدهٔ روی میز را می‌سوزاند."))
         root.addView(panel("۲. زمان توقف را تشخیص دهید", 17f))
-        root.addView(label("Collect to bank the board and pass your turn. If the Draw Deck runs out, collect the remaining board to finish the game."))
+        root.addView(label("با جمع کردن کارت‌ها، گنج روی میز را ذخیره و نوبت را واگذار کنید. با تمام شدن دستهٔ کارت، میز باقی‌مانده جمع می‌شود و بازی پایان می‌یابد."))
         root.addView(panel("۳. کارت‌های ویژه", 17f))
-        root.addView(label("Cannon targets a rival's bank; Hook returns your banked cards; Map recovers a Burn Deck card; Sword steals an eligible card from a rival. Each effect can be skipped."))
+        root.addView(label("توپ به کارت‌های ذخیره‌شدهٔ حریف حمله می‌کند؛ قلاب کارت‌ها را به میز برمی‌گرداند؛ نقشه کارت سوخته را بازیابی می‌کند و شمشیر کارت مجازی را از حریف می‌دزدد. هر اثر را می‌توان رد کرد."))
         root.addView(panel("۴. مراقب کراکن باشید", 17f))
-        root.addView(label("Kraken can force more draws before you can collect. Safe Harbor and Miser can protect selected cards from bust."))
+        root.addView(label("کراکن ممکن است پیش از جمع کردن گنج، شما را مجبور به برداشتن کارت‌های بیشتری کند. پناهگاه امن و خسیس می‌توانند از بعضی کارت‌ها محافظت کنند."))
         root.addView(panel("۵. امتیاز گنج", 17f))
-        root.addView(label("The highest banked value of each type counts. Golden Scales add five points for owning a Mermaid. Chest + Key may grant a Burn Deck bonus, and Treasure Hunter triples it."))
+        root.addView(label("بالاترین ارزش ذخیره‌شده از هر نوع کارت در امتیاز حساب می‌شود. فلس طلایی برای پری دریایی ۵ امتیاز اضافه می‌کند. صندوق و کلید جایزه می‌دهند و گنج‌یاب آن را سه‌برابر می‌کند."))
         root.addView(panel("۶. بازی گروهی", 17f))
-        root.addView(label("Choose local pass-and-play in the setup screen for multiple people on one device, or leave it off to face AI pirates."))
+        root.addView(label("برای چند بازیکن روی یک دستگاه، بازی گروهی را در تنظیمات شروع فعال کنید؛ در غیر این صورت با دزدان دریایی هوش مصنوعی بازی می‌کنید."))
         button("بازگشت") { if (state != null && state?.finished == false) renderGame() else showSetup() }
     }
 
@@ -980,8 +980,8 @@ class MainActivity : Activity() {
         )
         base("راهنمای کارت‌ها")
         CardType.entries.forEach { type ->
-            root.addView(panel("${type.symbol}  ${type.displayName}", 17f))
-            root.addView(label(descriptions[type] ?: "No additional rule."))
+            root.addView(panel("${type.symbol}  ${cardNameFa(type)}", 17f))
+            root.addView(label(cardDescriptionFa(type)))
         }
         button("بازگشت به منو") { showSetup() }
     }
@@ -1051,6 +1051,52 @@ class MainActivity : Activity() {
                 // Sound is an optional enhancement; unsupported audio should not interrupt play.
             }
         }
+    }
+
+    private fun cardNameFa(type: CardType): String = when (type) {
+        CardType.ANCHOR -> "لنگر"
+        CardType.CANNON -> "توپ"
+        CardType.CHEST -> "صندوق"
+        CardType.HOOK -> "قلاب"
+        CardType.KEY -> "کلید"
+        CardType.KRAKEN -> "کراکن"
+        CardType.MAP -> "نقشه"
+        CardType.MERMAID -> "پری دریایی"
+        CardType.ORACLE -> "پیشگو"
+        CardType.SWORD -> "شمشیر"
+    }
+
+    private fun traitNameFa(trait: TraitType): String = when (trait) {
+        TraitType.BEASTMASTER -> "ارباب هیولاها"
+        TraitType.CAPTAINS_HOOK -> "قلاب ناخدا"
+        TraitType.CASANOVA -> "کازانووا"
+        TraitType.DAVY_JONES_LOCKER -> "گنجینهٔ دیوی جونز"
+        TraitType.FISHERMAN -> "ماهیگیر"
+        TraitType.GOLDEN_SCALES -> "فلس طلایی"
+        TraitType.MISER -> "خسیس"
+        TraitType.NAVIGATOR -> "ناوبر"
+        TraitType.MASTER_GUNNER -> "توپچی ارشد"
+        TraitType.MISFIRE -> "خطای توپ"
+        TraitType.MYSTIC -> "عارف"
+        TraitType.PARRY -> "دفع ضربه"
+        TraitType.PLUNDERER -> "غارتگر"
+        TraitType.SAFE_HARBOR -> "پناهگاه امن"
+        TraitType.SCAVENGER -> "لاشه‌جمع‌کن"
+        TraitType.SWORDSMAN -> "شمشیرزن"
+        TraitType.TREASURE_HUNTER -> "گنج‌یاب"
+    }
+
+    private fun cardDescriptionFa(type: CardType): String = when (type) {
+        CardType.ANCHOR -> "لنگر میز را ثابت نگه می‌دارد؛ پناهگاه امن از لنگر و دو کارت بعدی محافظت می‌کند."
+        CardType.CANNON -> "توپ به کارت‌های ذخیره‌شدهٔ حریف حمله می‌کند؛ توپچی ارشد همهٔ کارت‌های همان نوع را حذف می‌کند."
+        CardType.CHEST -> "همراه شدن صندوق با کلید روی میز، هنگام ذخیره‌سازی جایزه ایجاد می‌کند."
+        CardType.HOOK -> "قلاب یک نوع کارت ذخیره‌شده را به میز برمی‌گرداند؛ قلاب ناخدا اجازهٔ دو نوع را می‌دهد."
+        CardType.KEY -> "کلید همراه صندوق روی میز، هنگام جمع‌کردن جایزه می‌دهد."
+        CardType.KRAKEN -> "کراکن معمولاً دو کارت اضافی را اجباری می‌کند؛ ارباب هیولاها این تعداد را به چهار می‌رساند."
+        CardType.MAP -> "نقشه یک کارت را از دستهٔ سوخته بازیابی می‌کند؛ ناوبر می‌تواند کارت مجاز را انتخاب کند."
+        CardType.MERMAID -> "بالاترین ارزش پری دریایی ذخیره‌شده در امتیاز حساب می‌شود؛ فلس طلایی ۵ امتیاز اضافه می‌کند."
+        CardType.ORACLE -> "پیشگو کارت بعدی را آشکار می‌کند؛ عارف تا سه کارت آینده را می‌بیند."
+        CardType.SWORD -> "شمشیر یک کارت مجاز را از ذخیرهٔ حریف می‌دزدد؛ شمشیرزن می‌تواند نوعی را بدزدد که خودش هم دارد."
     }
 
     private fun cardDrawableName(type: CardType): String = when (type) {
