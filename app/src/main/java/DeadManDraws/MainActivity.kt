@@ -5,18 +5,13 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.LayerDrawable
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
@@ -88,8 +83,6 @@ class MainActivity : Activity() {
     private var ownHandCardsRow: LinearLayout? = null
     private var drawDeckControl: LinearLayout? = null
     private var burnDeckControl: LinearLayout? = null
-    private var gameBackgroundBitmap: Bitmap? = null
-    private var brownWoodBackgroundBitmap: Bitmap? = null
     private var drawDeckImageView: ImageView? = null
     private var burnDeckImageView: ImageView? = null
     private var collectTreasureButton: Button? = null
@@ -207,24 +200,6 @@ class MainActivity : Activity() {
             if (strokeWidth > 0) setStroke(dp(strokeWidth), stroke)
         }
 
-    private fun brownWoodPanelDrawable(
-        stroke: Int = mutedGold,
-        strokeWidth: Int = 1
-    ): Drawable {
-        if (brownWoodBackgroundBitmap == null) {
-            brownWoodBackgroundBitmap = try {
-                assets.open("Brown-wood.jpg").use { BitmapFactory.decodeStream(it) }
-            } catch (_: Exception) {
-                null
-            }
-        }
-        val bitmap = brownWoodBackgroundBitmap
-            ?: return roundedDrawable(panelColor, stroke, strokeWidth)
-        val texture = BitmapDrawable(resources, bitmap).apply { gravity = Gravity.FILL }
-        val border = roundedDrawable(Color.TRANSPARENT, stroke, strokeWidth)
-        return LayerDrawable(arrayOf<Drawable>(texture, border))
-    }
-
     private fun base(title: String): LinearLayout {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         val scroll = ScrollView(this).apply {
@@ -276,19 +251,10 @@ class MainActivity : Activity() {
     private fun baseLandscapeGame(title: String, game: GameState) {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
-        if (gameBackgroundBitmap == null) {
-            gameBackgroundBitmap = try {
-                assets.open("wood.jpg").use { BitmapFactory.decodeStream(it) }
-            } catch (_: Exception) {
-                null
-            }
-        }
-        val gameBackground = gameBackgroundBitmap?.let { BitmapDrawable(resources, it) }
-            ?: roundedDrawable(navy)
         val screenRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            background = gameBackground
+            setBackgroundColor(navy)
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
@@ -297,7 +263,6 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
             gravity = Gravity.CENTER_VERTICAL
-            background = brownWoodPanelDrawable(gold, 1)
         }
         headerRow.addView(TextView(this).apply {
             text = title
@@ -367,7 +332,7 @@ class MainActivity : Activity() {
         val deckDock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = brownWoodPanelDrawable(mutedGold, 1)
+            setBackgroundColor(Color.TRANSPARENT)
             setPadding(dp(4), dp(2), dp(4), dp(2))
         }
         val deckRow = LinearLayout(this).apply {
@@ -453,7 +418,7 @@ class MainActivity : Activity() {
         val handDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = brownWoodPanelDrawable(gold, 1)
+            background = roundedDrawable(Color.argb(218, 24, 43, 52), gold, 1)
             setPadding(dp(6), dp(3), dp(6), dp(4))
         }
         ownHandTitle = label("کارت‌های ذخیره‌شدهٔ تو", 13f).apply {
@@ -484,7 +449,7 @@ class MainActivity : Activity() {
         val sidebar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = brownWoodPanelDrawable(mutedGold, 1)
+            background = roundedDrawable(Color.argb(218, 24, 43, 52), mutedGold, 1)
             setPadding(dp(6), dp(5), dp(6), dp(5))
         }
         contentRow.addView(sidebar, LinearLayout.LayoutParams(
@@ -620,7 +585,12 @@ class MainActivity : Activity() {
             val frame = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutDirection = View.LAYOUT_DIRECTION_RTL
-                background = brownWoodPanelDrawable(
+                background = roundedDrawable(
+                    when {
+                        active -> Color.rgb(68, 63, 35)
+                        selected -> mutedGold
+                        else -> panelColor
+                    },
                     if (active || selected) gold else mutedGold,
                     if (active || selected) 2 else 1
                 )
@@ -918,7 +888,7 @@ class MainActivity : Activity() {
     }
 
     private fun panel(text: String, size: Float = 16f): TextView = label(text, size).apply {
-        background = brownWoodPanelDrawable(mutedGold, 1)
+        background = roundedDrawable(panelColor, mutedGold, 1)
         setPadding(dp(12), dp(10), dp(12), dp(10))
     }
 
@@ -972,7 +942,7 @@ class MainActivity : Activity() {
         val profile = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = brownWoodPanelDrawable(mutedGold, 1)
+            background = roundedDrawable(panelColor, mutedGold, 1)
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         profile.addView(TextView(this).apply {
@@ -1023,7 +993,7 @@ class MainActivity : Activity() {
             textSize = 17f * textScale
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
-            background = brownWoodPanelDrawable(mutedGold, 1)
+            background = roundedDrawable(panelColor, mutedGold, 1)
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         root.addView(nameInput, LinearLayout.LayoutParams(
@@ -1095,7 +1065,7 @@ class MainActivity : Activity() {
                         gravity = Gravity.CENTER
                         isClickable = true
                         isFocusable = true
-                        background = brownWoodPanelDrawable(
+                        background = roundedDrawable(if (selected) mutedGold else panelColor,
                             if (selected) gold else mutedGold, if (selected) 2 else 1)
                         setPadding(dp(8), dp(8), dp(8), dp(8))
                         contentDescription = names[avatarIndex]
@@ -1193,7 +1163,7 @@ class MainActivity : Activity() {
         val nameInput = EditText(this).apply {
             setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_DONE; setText(captainName); hint = "نام بازیکن"
             textSize = 17f * textScale; setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY)
-            background = brownWoodPanelDrawable(mutedGold, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = roundedDrawable(panelColor, mutedGold, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         root.addView(nameInput)
         root.addView(label("نام بازیکنان دیگر (با ویرگول جدا کنید)", 14f))
@@ -1201,7 +1171,7 @@ class MainActivity : Activity() {
             setSingleLine(true); setText(prefs.getString("rival_names", rivalNames.joinToString(", ")).orEmpty())
             hint = "مثلاً: ریش‌سیاه، گرگ دریا"; textSize = 15f * textScale
             setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY)
-            background = brownWoodPanelDrawable(mutedGold, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = roundedDrawable(panelColor, mutedGold, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
         }
         root.addView(rivalNamesInput)
         root.addView(label("تعداد نفرات", 16f))
@@ -1279,7 +1249,7 @@ class MainActivity : Activity() {
             val choice = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = brownWoodPanelDrawable(gold, 1)
+                background = roundedDrawable(panelColor, gold, 1)
                 setPadding(dp(10), dp(10), dp(12), dp(10))
                 isClickable = true
                 isFocusable = true
