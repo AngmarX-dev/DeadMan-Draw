@@ -5,12 +5,15 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -83,10 +86,10 @@ class MainActivity : Activity() {
     private var ownHandCardsRow: LinearLayout? = null
     private var drawDeckControl: LinearLayout? = null
     private var burnDeckControl: LinearLayout? = null
+    private var gameBackgroundBitmap: Bitmap? = null
     private var drawDeckImageView: ImageView? = null
     private var burnDeckImageView: ImageView? = null
-    private var drawDeckCountLabel: TextView? = null
-    private var burnDeckCountLabel: TextView? = null
+    private var collectTreasureButton: Button? = null
     private var drawAnimationRunning = false
     private var lastRenderedBoardCardIds: Set<Int> = emptySet()
     private var landscapeScreenRoot: LinearLayout? = null
@@ -252,15 +255,29 @@ class MainActivity : Activity() {
     private fun baseLandscapeGame(title: String, game: GameState) {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
+        if (gameBackgroundBitmap == null) {
+            gameBackgroundBitmap = try {
+                assets.open("images/Images/UpPanel.png").use { BitmapFactory.decodeStream(it) }
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val gameBackground = gameBackgroundBitmap?.let { BitmapDrawable(resources, it) }
+            ?: roundedDrawable(navy)
         val screenRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            setBackgroundColor(navy)
+            background = gameBackground
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
 
-        screenRoot.addView(TextView(this).apply {
+        val headerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        headerRow.addView(TextView(this).apply {
             text = title
             textSize = 21f * textScale
             gravity = Gravity.CENTER
@@ -268,7 +285,29 @@ class MainActivity : Activity() {
             setTextColor(gold)
             setShadowLayer(dp(6).toFloat(), 0f, 0f, mutedGold)
             contentDescription = title
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)))
+        }, LinearLayout.LayoutParams(0, dp(38), 1f))
+        headerRow.addView(Button(this).apply {
+            text = "✕"
+            contentDescription = "خروج از بازی"
+            textSize = 17f
+            minWidth = dp(36)
+            minimumWidth = dp(36)
+            minHeight = dp(32)
+            minimumHeight = dp(32)
+            setPadding(0, 0, 0, 0)
+            setTextColor(Color.WHITE)
+            background = roundedDrawable(Color.argb(210, 13, 27, 35), gold, 1)
+            elevation = dp(2).toFloat()
+            setOnClickListener {
+                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                leaveGameScreen(game)
+            }
+        }, LinearLayout.LayoutParams(dp(38), dp(34)).apply {
+            marginStart = dp(4)
+        })
+        screenRoot.addView(headerRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(38)
+        ))
 
         val contentRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -280,21 +319,20 @@ class MainActivity : Activity() {
 
         val mainColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(navy, panelColor, navy)
-            )
+            setBackgroundColor(Color.TRANSPARENT)
         }
         contentRow.addView(mainColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
 
         val boardScroll = ScrollView(this).apply {
             isFillViewport = false
             isVerticalScrollBarEnabled = true
+            setBackgroundColor(Color.TRANSPARENT)
             contentDescription = "میز بازی قابل پیمایش"
         }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setBackgroundColor(Color.TRANSPARENT)
             setPadding(dp(8), dp(4), dp(8), dp(8))
         }
         boardScroll.addView(root, ViewGroup.LayoutParams(
@@ -305,22 +343,22 @@ class MainActivity : Activity() {
         ))
 
         val deckDock = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = roundedDrawable(panelColor, mutedGold, 1)
-            setPadding(dp(5), dp(3), dp(5), dp(2))
+            setBackgroundColor(Color.TRANSPARENT)
+            setPadding(dp(4), dp(2), dp(4), dp(2))
         }
         val deckRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.CENTER
         }
-        fun createDeckPile(drawableName: String, title: String, description: String, isDrawPile: Boolean): LinearLayout {
+        fun createDeckPile(drawableName: String, description: String, isDrawPile: Boolean): LinearLayout {
             val pile = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
+                orientation = LinearLayout.VERTICAL
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
                 gravity = Gravity.CENTER
-                background = roundedDrawable(navy, mutedGold, 1)
-                setPadding(dp(5), dp(2), dp(5), dp(2))
+                setBackgroundColor(Color.TRANSPARENT)
                 isClickable = true
                 isFocusable = true
                 contentDescription = description
@@ -330,55 +368,70 @@ class MainActivity : Activity() {
                 val pileImage = ImageView(this).apply {
                     setImageResource(imageId)
                     scaleType = ImageView.ScaleType.FIT_CENTER
-                    contentDescription = description
                     adjustViewBounds = true
+                    contentDescription = description
                 }
                 if (isDrawPile) drawDeckImageView = pileImage else burnDeckImageView = pileImage
-                pile.addView(pileImage, LinearLayout.LayoutParams(dp(46), dp(62)).apply {
-                    marginEnd = dp(7)
-                })
+                pile.addView(pileImage, LinearLayout.LayoutParams(dp(52), dp(78)))
             }
-            val info = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            info.addView(label(title, 13f).apply {
-                setTextColor(gold)
-                typeface = Typeface.DEFAULT_BOLD
-            })
-            val counter = label("۰", 17f).apply {
-                setTextColor(Color.WHITE)
-                typeface = Typeface.DEFAULT_BOLD
-            }
-            info.addView(counter)
-            pile.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             if (isDrawPile) {
-                drawDeckCountLabel = counter
                 pile.setOnClickListener { onDrawDeckTapped(game) }
-                pile.setOnLongClickListener { onDrawDeckLongPressed(game) }
             } else {
-                burnDeckCountLabel = counter
                 pile.setOnClickListener { onBurnDeckTapped(game) }
             }
-            deckRow.addView(pile, LinearLayout.LayoutParams(0, dp(70), 1f).apply { marginEnd = dp(5) })
+            deckRow.addView(pile, LinearLayout.LayoutParams(dp(58), dp(82)).apply {
+                marginStart = dp(6)
+                marginEnd = dp(6)
+            })
             return pile
         }
-        drawDeckControl = createDeckPile("backcart", "دستهٔ کارت", "لمس: برداشتن کارت؛ نگه‌داشتن: جمع‌کردن گنج", true)
-        burnDeckControl = createDeckPile("backcartburn", "کارت‌های سوخته", "برای بازیابی نقشه، دستهٔ سوخته را لمس کنید", false)
-        deckDock.addView(deckRow)
-        deckDock.addView(label("لمس دستهٔ کارت: برداشتن کارت  •  نگه‌داشتن: جمع‌کردن گنج", 10f).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 0)
-            setTextColor(Color.LTGRAY)
+
+        drawDeckControl = createDeckPile(
+            "backcart", "برای برداشتن کارت لمس کنید", true
+        )
+        collectTreasureButton = Button(this).apply {
+            text = "جمع‌آوری"
+            contentDescription = "جمع‌آوری گنج و پایان نوبت"
+            textSize = 14f * textScale
+            isAllCaps = false
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(25, 32, 34))
+            background = roundedDrawable(gold, mutedGold, 1)
+            elevation = dp(3).toFloat()
+            setPadding(dp(12), dp(5), dp(12), dp(5))
+            minHeight = dp(44)
+            minimumHeight = dp(44)
+            setOnClickListener {
+                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                if (!canCurrentPlayerAct(game) || game.pendingEffect != null || game.board.isEmpty()) return@setOnClickListener
+                isEnabled = false
+                animateDeckControl(drawDeckControl) {
+                    if (canCurrentPlayerAct(game) && game.pendingEffect == null && game.board.isNotEmpty()) {
+                        collectAfterConfirmation(game)
+                    }
+                }
+            }
+        }
+        deckRow.addView(collectTreasureButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(46)
+        ).apply {
+            marginStart = dp(8)
+            marginEnd = dp(8)
         })
+        burnDeckControl = createDeckPile(
+            "backcartburn", "دستهٔ کارت‌های سوخته؛ برای نقشه لمس کنید", false
+        )
+        deckDock.addView(deckRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(86)
+        ))
         mainColumn.addView(deckDock, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(96)
-        ).apply { topMargin = dp(3) })
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(88)
+        ).apply { topMargin = dp(2) })
 
         val handDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = roundedDrawable(panelColor, gold, 1)
+            background = roundedDrawable(Color.argb(218, 24, 43, 52), gold, 1)
             setPadding(dp(6), dp(3), dp(6), dp(4))
         }
         ownHandTitle = label("کارت‌های ذخیره‌شدهٔ تو", 13f).apply {
@@ -409,7 +462,7 @@ class MainActivity : Activity() {
         val sidebar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = roundedDrawable(panelColor, mutedGold, 1)
+            background = roundedDrawable(Color.argb(218, 24, 43, 52), mutedGold, 1)
             setPadding(dp(6), dp(5), dp(6), dp(5))
         }
         contentRow.addView(sidebar, LinearLayout.LayoutParams(
@@ -655,11 +708,12 @@ class MainActivity : Activity() {
     }
 
     private fun refreshDeckDock(game: GameState) {
-        drawDeckCountLabel?.text = "${game.drawDeck.size.toPersianDigits()} کارت"
-        burnDeckCountLabel?.text = "${game.burnDeck.size.toPersianDigits()} کارت"
         val canAct = canCurrentPlayerAct(game)
         drawDeckControl?.alpha = if (canAct) 1f else 0.72f
         burnDeckControl?.alpha = if (canAct) 1f else 0.72f
+        val canCollect = canAct && game.pendingEffect == null && game.board.isNotEmpty()
+        collectTreasureButton?.isEnabled = canCollect
+        collectTreasureButton?.alpha = if (canCollect) 1f else 0.55f
     }
 
     private fun canCurrentPlayerAct(game: GameState): Boolean {
@@ -701,11 +755,12 @@ class MainActivity : Activity() {
             return
         }
         if (game.drawDeck.isEmpty()) {
-            if (game.board.isNotEmpty()) onDrawDeckLongPressed(game)
-            else {
-                game.message = "دستهٔ کارت تمام شده است."
-                renderGame()
+            game.message = if (game.board.isNotEmpty()) {
+                "دستهٔ کارت تمام شده؛ برای ذخیرهٔ گنج دکمهٔ جمع‌آوری را بزن."
+            } else {
+                "دستهٔ کارت تمام شده است."
             }
+            renderGame()
             return
         }
         drawAnimationRunning = true
@@ -715,22 +770,6 @@ class MainActivity : Activity() {
             engine.draw(game)
             finishPlayerAction(game)
         }
-    }
-
-    private fun onDrawDeckLongPressed(game: GameState): Boolean {
-        if (!canCurrentPlayerAct(game)) return true
-        if (game.pendingEffect != null) {
-            if (::status.isInitialized) status.text = "برای رد اثر ویژه، دستهٔ اصلی را یک بار لمس کن."
-            return true
-        }
-        if (game.board.isEmpty()) {
-            if (::status.isInitialized) status.text = "هنوز گنجی روی میز نیست که جمع شود."
-            return true
-        }
-        animateDeckControl(drawDeckControl) {
-            if (canCurrentPlayerAct(game) && game.pendingEffect == null) collectAfterConfirmation(game)
-        }
-        return true
     }
 
     private fun onBurnDeckTapped(game: GameState) {
@@ -1409,12 +1448,10 @@ class MainActivity : Activity() {
             root.addView(ConfettiView(this), LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(62)
             ))
-            button("خروج") { leaveGameScreen(game) }
             deleteSavedGame()
             return
         }
 
-        button("خروج") { leaveGameScreen(game) }
         saveGame(game)
     }
 
