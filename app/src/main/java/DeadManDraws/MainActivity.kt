@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -85,6 +86,7 @@ class MainActivity : Activity() {
     private var ownHandCardsRow: LinearLayout? = null
     private var drawDeckControl: LinearLayout? = null
     private var burnDeckControl: LinearLayout? = null
+    private var gameBackgroundBitmap: Bitmap? = null
     private var drawDeckImageView: ImageView? = null
     private var burnDeckImageView: ImageView? = null
     private var collectTreasureButton: Button? = null
@@ -253,12 +255,15 @@ class MainActivity : Activity() {
     private fun baseLandscapeGame(title: String, game: GameState) {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
-        val gameBackground = try {
-            val bitmap = assets.open("images/Images/UpPanel.png").use { BitmapFactory.decodeStream(it) }
-            if (bitmap != null) BitmapDrawable(resources, bitmap) else roundedDrawable(navy)
-        } catch (_: Exception) {
-            roundedDrawable(navy)
+        if (gameBackgroundBitmap == null) {
+            gameBackgroundBitmap = try {
+                assets.open("images/Images/UpPanel.png").use { BitmapFactory.decodeStream(it) }
+            } catch (_: Exception) {
+                null
+            }
         }
+        val gameBackground = gameBackgroundBitmap?.let { BitmapDrawable(resources, it) }
+            ?: roundedDrawable(navy)
         val screenRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
@@ -765,21 +770,6 @@ class MainActivity : Activity() {
             engine.draw(game)
             finishPlayerAction(game)
         }
-    }
-
-    private fun onDrawDeckLongPressed(game: GameState): Boolean {
-        if (!canCurrentPlayerAct(game)) return true
-        if (game.pendingEffect != null) {
-            if (::status.isInitialized) status.text = "برای رد اثر ویژه، دستهٔ اصلی را یک بار لمس کن."
-            return true
-        }
-        if (game.board.isEmpty()) {
-            if (::status.isInitialized) status.text = "هنوز گنجی روی میز نیست که جمع شود."
-            return true
-        }
-        // Kept as a defensive fallback; collecting is normally done with the visible button.
-        collectTreasureButton?.performClick()
-        return true
     }
 
     private fun onBurnDeckTapped(game: GameState) {
