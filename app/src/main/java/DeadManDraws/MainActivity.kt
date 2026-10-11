@@ -11,7 +11,9 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Bundle
@@ -90,15 +92,16 @@ class MainActivity : Activity() {
     private var lastRenderedBoardCardIds: Set<Int> = emptySet()
     private var landscapeScreenRoot: LinearLayout? = null
 
-    private var navy = Color.rgb(13, 27, 35)
-    private var panelColor = Color.rgb(24, 43, 52)
-    private var gold = Color.rgb(242, 190, 91)
-    private var mutedGold = Color.rgb(112, 91, 56)
+    // Dark pastel surfaces keep the pirate artwork readable while giving controls a soft clay finish.
+    private var navy = Color.rgb(27, 31, 51)
+    private var panelColor = Color.rgb(47, 54, 82)
+    private var gold = Color.rgb(196, 181, 255)
+    private var mutedGold = Color.rgb(100, 109, 153)
 
     private val themes = listOf(
-        Theme("Deep Ocean", Color.rgb(13, 27, 35), Color.rgb(24, 43, 52), Color.rgb(242, 190, 91), Color.rgb(112, 91, 56)),
-        Theme("Black Pearl", Color.rgb(17, 15, 25), Color.rgb(38, 31, 48), Color.rgb(225, 190, 255), Color.rgb(105, 79, 126)),
-        Theme("Tropical Reef", Color.rgb(9, 34, 37), Color.rgb(19, 55, 57), Color.rgb(114, 229, 198), Color.rgb(54, 130, 116))
+        Theme("Lavender Ocean", Color.rgb(27, 31, 51), Color.rgb(47, 54, 82), Color.rgb(196, 181, 255), Color.rgb(100, 109, 153)),
+        Theme("Black Pearl", Color.rgb(32, 26, 48), Color.rgb(55, 45, 76), Color.rgb(232, 191, 255), Color.rgb(124, 99, 158)),
+        Theme("Tropical Reef", Color.rgb(20, 43, 52), Color.rgb(38, 67, 78), Color.rgb(156, 239, 220), Color.rgb(72, 133, 139))
     )
 
     private data class Theme(val name: String, val background: Int, val panel: Int, val accent: Int, val border: Int)
@@ -116,7 +119,7 @@ class MainActivity : Activity() {
         selectedCardBack = prefs.getInt("card_back", 1).coerceIn(cardBackColors.indices)
         applyTheme(themeIndex)
         window.statusBarColor = navy
-        window.navigationBarColor = navy
+        window.navigationBarColor = blendColor(navy, panelColor, 0.25f)
         val saved = loadSavedGame()
         if (saved != null && !saved.finished) {
             state = saved
@@ -193,12 +196,64 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private fun roundedDrawable(fill: Int, stroke: Int = Color.TRANSPARENT, strokeWidth: Int = 0): GradientDrawable =
-        GradientDrawable().apply {
-            setColor(fill)
-            cornerRadius = dp(14).toFloat()
-            if (strokeWidth > 0) setStroke(dp(strokeWidth), stroke)
+    private fun blendColor(from: Int, to: Int, amount: Float): Int {
+        val t = amount.coerceIn(0f, 1f)
+        return Color.argb(
+            Color.alpha(from),
+            (Color.red(from) * (1f - t) + Color.red(to) * t).toInt(),
+            (Color.green(from) * (1f - t) + Color.green(to) * t).toInt(),
+            (Color.blue(from) * (1f - t) + Color.blue(to) * t).toInt()
+        )
+    }
+
+    /**
+     * Layered, soft-edged surfaces inspired by claymorphism: offset lower shadow,
+     * a gentle diagonal gradient, a light rim, and a subtle inset highlight.
+     */
+    private fun roundedDrawable(
+        fill: Int,
+        stroke: Int = Color.TRANSPARENT,
+        strokeWidth: Int = 0
+    ): Drawable {
+        val radius = dp(19).toFloat()
+        val shadowColor = Color.argb(
+            (Color.alpha(fill) * 0.88f).toInt().coerceIn(0, 255),
+            (Color.red(fill) * 0.48f).toInt(),
+            (Color.green(fill) * 0.48f).toInt(),
+            (Color.blue(fill) * 0.48f).toInt()
+        )
+        val shadow = GradientDrawable().apply {
+            setColor(shadowColor)
+            cornerRadius = radius
         }
+        val face = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(
+                blendColor(fill, Color.WHITE, 0.15f),
+                fill,
+                blendColor(fill, Color.BLACK, 0.07f)
+            )
+        ).apply {
+            cornerRadius = radius
+            val edge = if (stroke != Color.TRANSPARENT) {
+                blendColor(stroke, Color.WHITE, 0.22f)
+            } else {
+                Color.argb(112, 255, 255, 255)
+            }
+            setStroke(dp(if (strokeWidth > 0) strokeWidth else 1), edge)
+        }
+        val innerHighlight = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            cornerRadius = (radius - dp(4)).coerceAtLeast(0f)
+            setStroke(dp(1), Color.argb(42, 255, 255, 255))
+        }
+        return LayerDrawable(arrayOf<Drawable>(shadow, face, innerHighlight)).apply {
+            // The back layer peeks out from the lower edge to create the soft clay shadow.
+            setLayerInset(0, dp(2), dp(5), 0, 0)
+            setLayerInset(1, 0, 0, dp(3), dp(5))
+            setLayerInset(2, dp(4), dp(3), dp(7), dp(8))
+        }
+    }
 
     private fun base(title: String): LinearLayout {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -254,7 +309,14 @@ class MainActivity : Activity() {
         val screenRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            setBackgroundColor(navy)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    blendColor(navy, panelColor, 0.20f),
+                    navy,
+                    blendColor(navy, panelColor, 0.30f)
+                )
+            )
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
@@ -263,6 +325,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
             gravity = Gravity.CENTER_VERTICAL
+            background = roundedDrawable(panelColor, mutedGold, 1)
+            setPadding(dp(5), dp(2), dp(5), dp(2))
         }
         headerRow.addView(TextView(this).apply {
             text = title
@@ -283,8 +347,8 @@ class MainActivity : Activity() {
             minimumHeight = dp(32)
             setPadding(0, 0, 0, 0)
             setTextColor(Color.WHITE)
-            background = roundedDrawable(Color.argb(210, 13, 27, 35), gold, 1)
-            elevation = dp(2).toFloat()
+            background = roundedDrawable(panelColor, gold, 1)
+            elevation = dp(5).toFloat()
             setOnClickListener {
                 if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 leaveGameScreen(game)
@@ -384,8 +448,8 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.rgb(25, 32, 34))
             background = roundedDrawable(gold, mutedGold, 1)
-            elevation = dp(3).toFloat()
-            setPadding(dp(12), dp(5), dp(12), dp(5))
+            elevation = dp(6).toFloat()
+            setPadding(dp(14), dp(6), dp(14), dp(6))
             minHeight = dp(44)
             minimumHeight = dp(44)
             setOnClickListener {
@@ -418,8 +482,9 @@ class MainActivity : Activity() {
         val handDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = roundedDrawable(Color.argb(218, 24, 43, 52), gold, 1)
+            background = roundedDrawable(panelColor, gold, 1)
             setPadding(dp(6), dp(3), dp(6), dp(4))
+            elevation = dp(4).toFloat()
         }
         ownHandTitle = label("کارت‌های ذخیره‌شدهٔ تو", 13f).apply {
             setTextColor(gold)
@@ -449,8 +514,9 @@ class MainActivity : Activity() {
         val sidebar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = roundedDrawable(Color.argb(218, 24, 43, 52), mutedGold, 1)
+            background = roundedDrawable(panelColor, mutedGold, 1)
             setPadding(dp(6), dp(5), dp(6), dp(5))
+            elevation = dp(5).toFloat()
         }
         contentRow.addView(sidebar, LinearLayout.LayoutParams(
             sidebarWidth, ViewGroup.LayoutParams.MATCH_PARENT
@@ -495,7 +561,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = roundedDrawable(cardColor(card.type), gold, 1)
-            setPadding(dp(2), dp(2), dp(2), dp(2))
+            elevation = dp(5).toFloat()
+            setPadding(dp(3), dp(3), dp(3), dp(3))
             contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value}"
         }
         val imageId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
@@ -909,8 +976,8 @@ class MainActivity : Activity() {
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setTextColor(Color.rgb(25, 32, 34))
             background = roundedDrawable(gold)
-            elevation = dp(3).toFloat()
-            setPadding(dp(10), dp(6), dp(10), dp(6))
+            elevation = dp(5).toFloat()
+            setPadding(dp(12), dp(7), dp(12), dp(7))
             minHeight = dp(48)
             setOnClickListener {
                 if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -1347,9 +1414,9 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
                     background = roundedDrawable(cardColor(card.type),
-                        if (protected) Color.rgb(111, 220, 188) else gold,
+                        if (protected) Color.rgb(150, 242, 219) else gold,
                         if (protected) 3 else 1)
-                    elevation = dp(5).toFloat()
+                    elevation = dp(7).toFloat()
                     contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
                     alpha = if (animateThisCard) 0.25f else 1f
                     scaleX = if (animateThisCard) 0.78f else 1f
