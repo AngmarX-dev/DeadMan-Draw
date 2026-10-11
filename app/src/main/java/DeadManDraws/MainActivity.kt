@@ -325,7 +325,7 @@ class MainActivity : Activity() {
         val cardGuideScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             isVerticalScrollBarEnabled = false
-            fillViewport = false
+            isFillViewport = false
             contentDescription = "راهنمای ثابت کارت‌ها؛ برای دیدن توضیح هر کارت لمس کنید"
         }
         val cardGuideRow = LinearLayout(this).apply {
