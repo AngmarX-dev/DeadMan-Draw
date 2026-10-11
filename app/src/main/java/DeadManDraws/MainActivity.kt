@@ -3,6 +3,7 @@ package DeadManDraws
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.graphics.Canvas
@@ -51,15 +52,8 @@ class MainActivity : Activity() {
     private var lastRules = GameRules()
     private var lastPassAndPlay = false
     private var captainName = "کاپیتان"
-    private var rivalNames: List<String> = emptyList()
     private var captainAvatar = "🏴‍☠️"
-    private var selectedCardBack = 1
     private val avatars = listOf("🏴‍☠️", "🦜", "⚓", "🦈", "🐙", "💀", "🧭", "🦑", "☠️")
-    private val cardBackColors = listOf(
-        Color.rgb(0, 220, 28), Color.BLUE, Color.RED, Color.rgb(242, 143, 191),
-        Color.rgb(13, 57, 140), Color.rgb(151, 0, 203), Color.CYAN, Color.rgb(89, 143, 255),
-        Color.rgb(143, 250, 250), Color.rgb(93, 46, 46), Color.rgb(255, 103, 0), Color.YELLOW
-    )
     private var lastFeedbackMessage = ""
     private var themeIndex = 0
     private var reducedMotion = false
@@ -114,7 +108,6 @@ class MainActivity : Activity() {
         textScale = prefs.getFloat("text_scale", 1f).coerceIn(0.85f, 1.2f)
         captainName = prefs.getString("captain_name", "کاپیتان").orEmpty().ifBlank { "کاپیتان" }
         captainAvatar = prefs.getString("captain_avatar", "🏴‍☠️").orEmpty().ifBlank { "🏴‍☠️" }
-        selectedCardBack = prefs.getInt("card_back", 1).coerceIn(cardBackColors.indices)
         applyTheme(themeIndex)
         window.statusBarColor = navy
         window.navigationBarColor = blendColor(navy, panelColor, 0.25f)
@@ -126,7 +119,6 @@ class MainActivity : Activity() {
             lastRules = saved.rules.copy()
             lastPassAndPlay = saved.passAndPlay
             captainName = saved.players.firstOrNull()?.name ?: "Captain"
-            rivalNames = saved.players.drop(1).map { it.name }
             AlertDialog.Builder(this)
                 .setTitle("ادامهٔ بازی؟")
                 .setMessage("یک بازی ناتمام ذخیره شده است. ادامه می‌دهید یا بازی تازه‌ای شروع می‌کنید؟")
@@ -318,6 +310,58 @@ class MainActivity : Activity() {
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
+
+        val cardGuideBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(2), dp(1), dp(2), dp(2))
+        }
+        cardGuideBar.addView(label("راهنما", 12f).apply {
+            setTextColor(gold)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(dp(52), dp(42)))
+        val cardGuideScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            isVerticalScrollBarEnabled = false
+            fillViewport = false
+            contentDescription = "راهنمای ثابت کارت‌ها؛ برای دیدن توضیح هر کارت لمس کنید"
+        }
+        val cardGuideRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        CardType.entries.forEach { type ->
+            val chip = TextView(this).apply {
+                text = "${type.symbol}  ${cardNameFa(type)}"
+                textSize = 11f * textScale
+                maxLines = 1
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                background = roundedDrawable(cardColor(type), mutedGold, 1)
+                setPadding(dp(7), dp(5), dp(7), dp(5))
+                isClickable = true
+                isFocusable = true
+                contentDescription = "راهنمای ${cardNameFa(type)}؛ برای توضیحات لمس کنید"
+                setOnClickListener {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("${type.symbol}  ${cardNameFa(type)}")
+                        .setMessage(cardDescriptionFa(type))
+                        .setPositiveButton("متوجه شدم", null)
+                        .show()
+                }
+            }
+            cardGuideRow.addView(chip, LinearLayout.LayoutParams(dp(92), dp(38)).apply {
+                marginEnd = dp(5)
+            })
+        }
+        cardGuideScroll.addView(cardGuideRow)
+        cardGuideBar.addView(cardGuideScroll, LinearLayout.LayoutParams(0, dp(44), 1f))
+        screenRoot.addView(cardGuideBar, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(48)
+        ))
 
         val contentRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -591,6 +635,141 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showPlayerCardsFullscreen(game: GameState, player: PlayerData) {
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val fullRoot = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(navy, panelColor, navy)
+            )
+            setPadding(dp(14), dp(10), dp(14), dp(12))
+        }
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        titleRow.addView(TextView(this).apply {
+            text = "کارت‌های ${player.name}  •  ${player.bank.size.toPersianDigits()} کارت  •  ${engine.scoreFor(player).toPersianDigits()} امتیاز"
+            textSize = 19f * textScale
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(gold)
+            gravity = Gravity.CENTER_VERTICAL
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        titleRow.addView(Button(this).apply {
+            text = "بستن  ✕"
+            isAllCaps = false
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            background = roundedDrawable(panelColor, gold, 1)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(dp(94), dp(42)))
+        fullRoot.addView(titleRow)
+
+        val cardsScroll = ScrollView(this).apply {
+            isFillViewport = true
+            contentDescription = "تمام کارت‌های ذخیره‌شدهٔ ${player.name}"
+        }
+        val cardsColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(10), 0, dp(12))
+        }
+        if (player.bank.isEmpty()) {
+            cardsColumn.addView(TextView(this).apply {
+                text = "این بازیکن هنوز کارتی ذخیره نکرده است."
+                textSize = 18f * textScale
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setPadding(dp(12), dp(30), dp(12), dp(30))
+            })
+        } else {
+            val columns = if (resources.configuration.screenWidthDp >= 1000) 5 else 4
+            player.bank.chunked(columns).forEach { group ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutDirection = View.LAYOUT_DIRECTION_LTR
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(4), 0, dp(4))
+                }
+                group.forEach { card ->
+                    val protected = card.id in game.protectedCardIds
+                    val tile = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = Gravity.CENTER
+                        background = roundedDrawable(cardColor(card.type),
+                            if (protected) Color.rgb(150, 242, 219) else gold,
+                            if (protected) 3 else 1)
+                        elevation = dp(5).toFloat()
+                        setPadding(dp(5), dp(5), dp(5), dp(5))
+                        contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value.toPersianDigits()}"
+                    }
+                    val artId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
+                    if (artId != 0) {
+                        tile.addView(ImageView(this).apply {
+                            setImageResource(artId)
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            contentDescription = cardNameFa(card.type)
+                        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(100)))
+                    } else {
+                        tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, dp(100)
+                        ))
+                    }
+                    tile.addView(TextView(this).apply {
+                        text = cardNameFa(card.type)
+                        textSize = 13f * textScale
+                        gravity = Gravity.CENTER
+                        maxLines = 1
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(Color.WHITE)
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
+                    tile.addView(TextView(this).apply {
+                        text = "${card.value.toPersianDigits()} امتیاز${if (protected) " • محافظت‌شده" else ""}"
+                        textSize = 11f * textScale
+                        gravity = Gravity.CENTER
+                        setTextColor(if (protected) Color.rgb(167, 255, 222) else Color.WHITE)
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
+
+                    val effect = game.pendingEffect
+                    val canSelect = effect != null && effect.playerIndex == game.currentPlayer && when (effect.cardType) {
+                        CardType.HOOK -> player.id == game.currentPlayer
+                        CardType.CANNON, CardType.SWORD -> player.id != game.currentPlayer
+                        else -> false
+                    }
+                    if (canSelect) {
+                        tile.isClickable = true
+                        tile.isFocusable = true
+                        tile.setOnClickListener {
+                            dialog.dismiss()
+                            onBankCardTapped(game, player.id, card)
+                        }
+                    }
+                    row.addView(tile, LinearLayout.LayoutParams(dp(126), dp(158)).apply {
+                        marginStart = dp(5)
+                        marginEnd = dp(5)
+                    })
+                }
+                cardsColumn.addView(row, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ))
+            }
+        }
+        cardsScroll.addView(cardsColumn)
+        fullRoot.addView(cardsScroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        dialog.setContentView(fullRoot)
+        dialog.show()
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+    }
+
     private fun refreshPlayerSidebar(game: GameState) {
         val list = playerListColumn ?: return
         if (game.players.none { it.id == selectedPlayerId }) selectedPlayerId = 0
@@ -624,20 +803,42 @@ class MainActivity : Activity() {
                 contentDescription = "بازیکن ${player.name} و کارت‌های ذخیره‌شده"
             }
 
+            val headerRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.CENTER_VERTICAL
+            }
             val header = TextView(this).apply {
                 text = "$prefix  ${player.name}\n${if (robot) "ربات" else "بازیکن"}  •  ${player.bank.size.toPersianDigits()} کارت  •  ${engine.scoreFor(player).toPersianDigits()} امتیاز"
-                textSize = 13f * textScale
+                textSize = 12f * textScale
                 setTextColor(if (active || selected) gold else Color.WHITE)
                 gravity = Gravity.CENTER_VERTICAL
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(dp(5), dp(4), dp(5), dp(5))
+                setPadding(dp(4), dp(4), dp(4), dp(4))
                 minHeight = dp(45)
                 isClickable = true
                 isFocusable = true
                 contentDescription = "انتخاب ${player.name}"
                 setOnClickListener { onPlayerRowTapped(game, player) }
             }
-            frame.addView(header, LinearLayout.LayoutParams(
+            headerRow.addView(header, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+            ))
+            headerRow.addView(Button(this).apply {
+                text = "تمام‌صفحه"
+                contentDescription = "نمایش تمام‌صفحهٔ کارت‌های ${player.name}"
+                textSize = 10f
+                isAllCaps = false
+                minWidth = dp(74)
+                minimumWidth = dp(74)
+                minHeight = dp(34)
+                minimumHeight = dp(34)
+                setPadding(dp(2), 0, dp(2), 0)
+                setTextColor(Color.WHITE)
+                background = roundedDrawable(panelColor, gold, 1)
+                setOnClickListener { showPlayerCardsFullscreen(game, player) }
+            }, LinearLayout.LayoutParams(dp(78), dp(36)).apply { marginStart = dp(2) })
+            frame.addView(headerRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
 
@@ -995,7 +1196,6 @@ class MainActivity : Activity() {
         }
         button("بازی گروهی") { showSetup(groupMode = true) }
         button("راهنما") { showHowToPlay() }
-        button("انتخاب پشت کارت") { showCardBackPicker() }
         button("تنظیمات") { showSettingsScreen() }
         button("خرید سکه") { showCoinShop() }
         button("بازگشت به فهرست بازی‌ها") { finish() }
@@ -1031,7 +1231,6 @@ class MainActivity : Activity() {
             prefs.edit().putInt("theme", themeIndex).apply()
             showSettingsScreen()
         }
-        button("انتخاب پشت کارت") { showCardBackPicker() }
         val textScaleStops = listOf(0.85f, 0.95f, 1.0f, 1.1f, 1.2f)
         val textScaleLabels = listOf("۸۵٪", "۹۵٪", "۱۰۰٪", "۱۱۰٪", "۱۲۰٪")
         val selectedScale = textScaleStops.indexOf(textScale).takeIf { it >= 0 } ?: 2
@@ -1119,42 +1318,6 @@ class MainActivity : Activity() {
         button("بازگشت به منو") { if (returnToSettings) showSettingsScreen() else showMainMenu() }
     }
 
-    private fun showCardBackPicker() {
-        base("پشت کارت")
-        root.addView(label("رنگ دلخواه کارت‌ها را انتخاب کنید.", 15f))
-        var index = 0
-        while (index < cardBackColors.size) {
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-            for (column in 0 until 4) {
-                val colorIndex = index + column
-                if (colorIndex < cardBackColors.size) {
-                    val chosen = colorIndex == selectedCardBack
-                    val swatch = TextView(this).apply {
-                        text = if (chosen) "✓" else ""
-                        textSize = 24f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-                        background = GradientDrawable().apply {
-                            setColor(cardBackColors[colorIndex]); cornerRadius = dp(22).toFloat()
-                            setStroke(dp(if (chosen) 4 else 1), if (chosen) Color.WHITE else Color.LTGRAY)
-                        }
-                        isClickable = true; isFocusable = true
-                        contentDescription = "رنگ کارت ${colorIndex + 1}"
-                        setOnClickListener {
-                            selectedCardBack = colorIndex
-                            getSharedPreferences("dead_man_draw_prefs", MODE_PRIVATE).edit().putInt("card_back", selectedCardBack).apply()
-                            showCardBackPicker()
-                        }
-                    }
-                    row.addView(swatch, LinearLayout.LayoutParams(0, dp(110), 1f).apply {
-                        marginEnd = dp(8); bottomMargin = dp(10)
-                    })
-                }
-            }
-            root.addView(row); index += 4
-        }
-        button("ذخیره") { showMainMenu() }
-        button("بازگشت به منو") { showMainMenu() }
-    }
-
     private fun showCoinShop() {
         val prefs = getSharedPreferences("dead_man_draw_prefs", MODE_PRIVATE)
         val coins = prefs.getInt("coins", 152).coerceAtLeast(0)
@@ -1177,25 +1340,10 @@ class MainActivity : Activity() {
     }
 
     private fun showSetup(groupMode: Boolean = false) {
-        val prefs = getSharedPreferences("dead_man_draw_prefs", MODE_PRIVATE)
         base("بازی جدید")
-        root.addView(label("نام بازیکن", 15f))
-        val nameInput = EditText(this).apply {
-            setSingleLine(true); imeOptions = EditorInfo.IME_ACTION_DONE; setText(captainName); hint = "نام بازیکن"
-            textSize = 17f * textScale; setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY)
-            background = roundedDrawable(panelColor, mutedGold, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
-        }
-        root.addView(nameInput)
-        root.addView(label("نام بازیکنان دیگر (با ویرگول جدا کنید)", 14f))
-        val rivalNamesInput = EditText(this).apply {
-            setSingleLine(true); setText(prefs.getString("rival_names", rivalNames.joinToString(", ")).orEmpty())
-            hint = "مثلاً: ریش‌سیاه، گرگ دریا"; textSize = 15f * textScale
-            setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY)
-            background = roundedDrawable(panelColor, mutedGold, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
-        }
-        root.addView(rivalNamesInput)
-        root.addView(label("تعداد نفرات", 16f))
-        root.addView(label("تعداد نفرات بین ۲ تا ۸ نفر است.", 13f))
+        root.addView(panel("خدمه را آماده کن و برای یافتن گنج راهی شو.", 17f))
+        root.addView(label("تعداد بازیکنان", 16f))
+        root.addView(label("از ۲ تا ۸ بازیکن؛ در حالت تک‌نفره بقیه با هوش مصنوعی بازی می‌کنند.", 13f))
         val countLabel = panel("تعداد نفرات: ${lastPlayerCount.toPersianDigits()}", 17f)
         root.addView(countLabel)
         val players = SeekBar(this).apply { max = 6; progress = (lastPlayerCount - 2).coerceIn(0, 6) }
@@ -1207,7 +1355,7 @@ class MainActivity : Activity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
         })
         root.addView(players)
-        root.addView(label("درجهٔ سختی", 16f))
+        root.addView(label("درجهٔ سختی هوش مصنوعی", 16f))
         val difficultyNames = listOf("آسان", "معمولی", "سخت")
         val difficultyLabel = panel(difficultyNames[lastDifficulty.coerceIn(0, 2)], 17f)
         root.addView(difficultyLabel)
@@ -1220,23 +1368,16 @@ class MainActivity : Activity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
         })
         root.addView(levels)
-        root.addView(label("قوانین بازی", 15f))
-        val chestKey = checkbox("فعال بودن جایزهٔ صندوق و کلید", prefs.getBoolean("chest_key_bonus", true))
-        val kraken = checkbox("فعال بودن فشار کراکن", prefs.getBoolean("kraken_pressure", true))
         val passPlay = checkbox("بازی گروهی روی یک دستگاه", groupMode || lastPassAndPlay)
-        root.addView(chestKey); root.addView(kraken); root.addView(passPlay)
+        root.addView(passPlay)
         button("شروع بازی") {
-            captainName = nameInput.text.toString().trim().ifBlank { "کاپیتان" }.take(24)
-            rivalNames = rivalNamesInput.text.toString().split(",").map { it.trim().take(24) }
-                .filter { it.isNotBlank() }.distinct().take(7)
-            lastPlayerCount = players.progress + 2; lastDifficulty = levels.progress; difficulty = lastDifficulty
-            lastRules = GameRules(chestKey.isChecked, kraken.isChecked)
+            lastPlayerCount = players.progress + 2
+            lastDifficulty = levels.progress
+            difficulty = lastDifficulty
+            lastRules = GameRules()
             lastPassAndPlay = passPlay.isChecked || groupMode
-            prefs.edit().putString("captain_name", captainName).putString("rival_names", rivalNames.joinToString(", "))
-                .putBoolean("chest_key_bonus", chestKey.isChecked).putBoolean("kraken_pressure", kraken.isChecked).apply()
             startNewGame(lastPlayerCount, lastDifficulty, lastRules, lastPassAndPlay)
         }
-        button("تنظیمات") { showSettingsScreen() }
         button("راهنما") { showHowToPlay() }
         button("بازگشت به منو") { showMainMenu() }
     }
@@ -1254,8 +1395,8 @@ class MainActivity : Activity() {
         drawAnimationRunning = false
         state = engine.newGame(playerCount, skill, rules, passPlay)
         state!!.players[0].name = captainName.ifBlank { "Captain" }
-        state!!.players.drop(1).forEachIndexed { index, player ->
-            player.name = rivalNames.getOrNull(index).orEmpty().ifBlank { "Pirate ${player.id + 1}" }
+        state!!.players.drop(1).forEach { player ->
+            player.name = "دزد دریایی ${player.id + 1}"
             engine.setTrait(state!!, player.id, TraitType.entries.random())
         }
         chooseTrait()
@@ -1264,28 +1405,41 @@ class MainActivity : Activity() {
     private fun chooseTrait() {
         val game = state ?: return
         base("انتخاب توانایی")
-        root.addView(label("${game.players[0].name}، توانایی این سفر را انتخاب کنید.", 16f))
+        root.addView(label("${game.players[0].name}، یکی از این توانایی‌ها را انتخاب کن.", 17f))
+        root.addView(label("روی تصویر یا توضیح توانایی بزن تا انتخاب شود.", 13f))
         TraitType.entries.shuffled().take(2).forEach { trait ->
             val choice = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
                 gravity = Gravity.CENTER_VERTICAL
                 background = roundedDrawable(panelColor, gold, 1)
                 setPadding(dp(10), dp(10), dp(12), dp(10))
                 isClickable = true
                 isFocusable = true
-                contentDescription = "Choose ${trait.displayName}. ${trait.description}"
+                contentDescription = "${traitNameFa(trait)}. ${traitDescriptionFa(trait)}"
             }
             val artId = resources.getIdentifier(traitDrawableName(trait), "drawable", packageName)
             if (artId != 0) {
                 choice.addView(ImageView(this).apply {
                     setImageResource(artId)
                     scaleType = ImageView.ScaleType.FIT_CENTER
-                    contentDescription = "${trait.displayName} trait illustration"
-                }, LinearLayout.LayoutParams(dp(86), dp(104)).apply { marginEnd = dp(12) })
+                    contentDescription = "تصویر توانایی ${traitNameFa(trait)}"
+                }, LinearLayout.LayoutParams(dp(142), dp(158)).apply { marginEnd = dp(14) })
+            } else {
+                choice.addView(TextView(this).apply {
+                    text = "⚓"
+                    textSize = 54f
+                    gravity = Gravity.CENTER
+                    setTextColor(gold)
+                    contentDescription = "نماد توانایی ${traitNameFa(trait)}"
+                }, LinearLayout.LayoutParams(dp(142), dp(158)).apply { marginEnd = dp(14) })
             }
             val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            copy.addView(label("✦  ${trait.displayName}", 17f))
-            copy.addView(label(trait.description, 13f))
+            copy.addView(label("✦  ${traitNameFa(trait)}", 19f).apply {
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(gold)
+            })
+            copy.addView(label(traitDescriptionFa(trait), 16f))
             choice.addView(copy, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             choice.setOnClickListener {
                 if (hapticsEnabled) choice.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -1294,11 +1448,34 @@ class MainActivity : Activity() {
             }
             root.addView(choice, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(10) })
+            ).apply { bottomMargin = dp(12) })
         }
         button("مشاهدهٔ همهٔ توانایی‌ها") {
-            base("راهنمای توانایی‌های دزدان دریایی")
-            TraitType.entries.forEach { root.addView(panel("${it.displayName}\n${it.description}", 14f)) }
+            base("راهنمای توانایی‌ها")
+            TraitType.entries.forEach { trait ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutDirection = View.LAYOUT_DIRECTION_RTL
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = roundedDrawable(panelColor, mutedGold, 1)
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                }
+                val artId = resources.getIdentifier(traitDrawableName(trait), "drawable", packageName)
+                if (artId != 0) {
+                    row.addView(ImageView(this).apply {
+                        setImageResource(artId)
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        contentDescription = "تصویر ${traitNameFa(trait)}"
+                    }, LinearLayout.LayoutParams(dp(88), dp(96)).apply { marginEnd = dp(10) })
+                }
+                val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                details.addView(label(traitNameFa(trait), 16f).apply { setTextColor(gold) })
+                details.addView(label(traitDescriptionFa(trait), 13f))
+                row.addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                root.addView(row, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = dp(8) })
+            }
             button("بازگشت به انتخاب توانایی") { chooseTrait() }
         }
     }
@@ -1690,6 +1867,26 @@ class MainActivity : Activity() {
         TraitType.SCAVENGER -> "لاشه‌جمع‌کن"
         TraitType.SWORDSMAN -> "شمشیرزن"
         TraitType.TREASURE_HUNTER -> "گنج‌یاب"
+    }
+
+    private fun traitDescriptionFa(trait: TraitType): String = when (trait) {
+        TraitType.BEASTMASTER -> "کراکن حریف را مجبور می‌کند به‌جای دو کارت، چهار کارت دیگر بکشد."
+        TraitType.CAPTAINS_HOOK -> "قلاب به تو اجازه می‌دهد تا دو نوع کارت متفاوت از بانک خودت به میز برگردانی."
+        TraitType.CASANOVA -> "هر پری دریایی که بکشی، فوراً در بانک ذخیره می‌شود و روی میز باقی نمی‌ماند."
+        TraitType.DAVY_JONES_LOCKER -> "یک حریف را هدف بگیر؛ اگر او بسوزد، کارت‌های روی میز را تصاحب می‌کنی."
+        TraitType.FISHERMAN -> "کراکن را فوراً ذخیره می‌کنی و مجبور به کشیدن کارت‌های اضافی نمی‌شوی."
+        TraitType.GOLDEN_SCALES -> "هر پری دریایی ذخیره‌شده پنج امتیاز اضافه می‌گیرد."
+        TraitType.MISER -> "کارت‌هایی که با قلاب به میز برمی‌گردانی، از سوختن محافظت می‌شوند."
+        TraitType.NAVIGATOR -> "هنگام استفاده از نقشه می‌توانی هر کارت مجاز را از دستهٔ سوخته انتخاب کنی."
+        TraitType.MASTER_GUNNER -> "توپ تمام کارت‌های یک نوع انتخاب‌شده را از بانک حریف حذف می‌کند."
+        TraitType.MISFIRE -> "وقتی توپ به تو شلیک شود، به‌جای کارت انتخاب‌شده، بالاترین کارت بانک تو می‌سوزد."
+        TraitType.MYSTIC -> "پیشگو تا سه کارت بعدی دسته را برایت آشکار می‌کند."
+        TraitType.PARRY -> "اگر حریف شمشیر بکشد و تو کراکن ذخیره‌شده داشته باشی، او مجبور می‌شود آن را بازی کند."
+        TraitType.PLUNDERER -> "هنگام جمع‌کردن جایزهٔ صندوق و کلید، جایزه را از بانک یک حریف برمی‌داری."
+        TraitType.SAFE_HARBOR -> "لنگر و دو کارت بعدی روی میز را در برابر سوختن محافظت می‌کنی."
+        TraitType.SCAVENGER -> "کارتی را که با توپ از حریف می‌گیری، به‌جای سوزاندن برای خودت نگه می‌داری."
+        TraitType.SWORDSMAN -> "با شمشیر می‌توانی نوع کارتی را بدزدی که از همان نوع در بانک خودت هم داری."
+        TraitType.TREASURE_HUNTER -> "جایزهٔ دستهٔ سوخته هنگام جمع‌کردن صندوق و کلید سه برابر می‌شود."
     }
 
     private fun cardDescriptionFa(type: CardType): String = when (type) {
