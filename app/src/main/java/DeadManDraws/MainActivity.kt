@@ -24,18 +24,17 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
-import android.view.animation.TranslateAnimation
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.HorizontalScrollView
-import android.widget.ProgressBar
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.ObjectInputStream
@@ -46,7 +45,6 @@ class MainActivity : Activity() {
     private val engine = GameEngine()
     private var state: GameState? = null
     private lateinit var root: LinearLayout
-    private lateinit var status: TextView
     private var difficulty = 1
     private var lastPlayerCount = 4
     private var lastDifficulty = 1
@@ -320,45 +318,6 @@ class MainActivity : Activity() {
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
-
-        val headerRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-            gravity = Gravity.CENTER_VERTICAL
-            background = roundedDrawable(panelColor, mutedGold, 1)
-            setPadding(dp(5), dp(2), dp(5), dp(2))
-        }
-        headerRow.addView(TextView(this).apply {
-            text = title
-            textSize = 21f * textScale
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
-            setTextColor(gold)
-            setShadowLayer(dp(6).toFloat(), 0f, 0f, mutedGold)
-            contentDescription = title
-        }, LinearLayout.LayoutParams(0, dp(38), 1f))
-        headerRow.addView(Button(this).apply {
-            text = "✕"
-            contentDescription = "خروج از بازی"
-            textSize = 17f
-            minWidth = dp(36)
-            minimumWidth = dp(36)
-            minHeight = dp(32)
-            minimumHeight = dp(32)
-            setPadding(0, 0, 0, 0)
-            setTextColor(Color.WHITE)
-            background = roundedDrawable(panelColor, gold, 1)
-            elevation = dp(5).toFloat()
-            setOnClickListener {
-                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                leaveGameScreen(game)
-            }
-        }, LinearLayout.LayoutParams(dp(38), dp(34)).apply {
-            marginStart = dp(4)
-        })
-        screenRoot.addView(headerRow, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(38)
-        ))
 
         val contentRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -830,10 +789,7 @@ class MainActivity : Activity() {
         if (!canCurrentPlayerAct(game)) return
         val effect = game.pendingEffect
         if (effect?.cardType != CardType.MAP || effect.playerIndex != game.currentPlayer) {
-            if (::status.isInitialized) {
-                status.text = "دستهٔ سوخته فقط هنگام استفاده از نقشه قابل بازیابی است."
-                status.visibility = View.VISIBLE
-            }
+            Toast.makeText(this, "دستهٔ سوخته فقط هنگام استفاده از نقشه قابل بازیابی است.", Toast.LENGTH_SHORT).show()
             return
         }
         animateDeckControl(burnDeckControl) {
@@ -917,10 +873,7 @@ class MainActivity : Activity() {
     private fun applySelectedHookCards(game: GameState): Boolean {
         if (!canCurrentPlayerAct(game) || game.pendingEffect?.cardType != CardType.HOOK) return true
         if (selectedHookIds.isEmpty()) {
-            if (::status.isInitialized) {
-                status.text = "اول دست‌کم یک کارت از نوار پایین انتخاب کن."
-                status.visibility = View.VISIBLE
-            }
+            Toast.makeText(this, "اول دست‌کم یک کارت از نوار پایین انتخاب کن.", Toast.LENGTH_SHORT).show()
             return true
         }
         if (engine.resolveHook(game, selectedHookIds.toList())) {
@@ -1372,33 +1325,6 @@ class MainActivity : Activity() {
                 message.endsWith("'s turn.", ignoreCase = true) ||
                 message.endsWith("’s turn.", ignoreCase = true) ||
                 message.contains("نوبت")
-        }
-        status = panel(game.message, 16f).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            setTextColor(if (game.message.contains("Bust!", ignoreCase = true)) Color.rgb(255, 142, 112) else gold)
-            visibility = if (isTurnNotice) View.GONE else View.VISIBLE
-        }
-        root.addView(status)
-        if (aiSequenceRunning && !game.passAndPlay && !active.isHuman) {
-            root.addView(panel("🤖  ${active.name} در حال بازی است؛ حرکت‌ها یکی‌یکی نمایش داده می‌شوند.", 15f))
-            root.addView(ProgressBar(this).apply {
-                isIndeterminate = true
-                contentDescription = "ربات در حال فکر کردن"
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(5)))
-        }
-        if (!isTurnNotice && !reducedMotion) {
-            if (game.message.contains("Bust!", ignoreCase = true)) {
-                status.startAnimation(TranslateAnimation(-dp(7).toFloat(), dp(7).toFloat(), 0f, 0f).apply {
-                    duration = 48
-                    repeatCount = 5
-                    repeatMode = android.view.animation.Animation.REVERSE
-                })
-            } else {
-                status.startAnimation(TranslateAnimation(0f, 0f, dp(12).toFloat(), 0f).apply {
-                    duration = 250
-                    interpolator = DecelerateInterpolator()
-                })
-            }
         }
         if (!isTurnNotice) feedbackForMessage(game.message)
 
