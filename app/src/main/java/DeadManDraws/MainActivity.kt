@@ -257,10 +257,7 @@ class MainActivity : Activity() {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             val sidePadding = if (resources.configuration.screenWidthDp >= 600) dp(56) else dp(20)
             setPadding(sidePadding, dp(18), sidePadding, dp(26))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(navy, panelColor, navy)
-            )
+            background = resources.getDrawable(R.drawable.game_background, theme)
         }
         scroll.addView(root, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -299,14 +296,7 @@ class MainActivity : Activity() {
         val screenRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(
-                    blendColor(navy, panelColor, 0.20f),
-                    navy,
-                    blendColor(navy, panelColor, 0.30f)
-                )
-            )
+            background = resources.getDrawable(R.drawable.game_background, theme)
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
