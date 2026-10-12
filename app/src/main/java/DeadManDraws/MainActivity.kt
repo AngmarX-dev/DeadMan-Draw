@@ -31,6 +31,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -80,6 +81,7 @@ class MainActivity : Activity() {
     private var drawDeckControl: LinearLayout? = null
     private var burnDeckControl: LinearLayout? = null
     private var drawDeckImageView: ImageView? = null
+    private var drawArrowIndicator: TextView? = null
     private var burnDeckImageView: ImageView? = null
     private var collectTreasureButton: Button? = null
     private var drawAnimationRunning = false
@@ -95,7 +97,8 @@ class MainActivity : Activity() {
     private val themes = listOf(
         Theme("Lavender Ocean", Color.rgb(27, 31, 51), Color.rgb(47, 54, 82), Color.rgb(196, 181, 255), Color.rgb(100, 109, 153)),
         Theme("Black Pearl", Color.rgb(32, 26, 48), Color.rgb(55, 45, 76), Color.rgb(232, 191, 255), Color.rgb(124, 99, 158)),
-        Theme("Tropical Reef", Color.rgb(20, 43, 52), Color.rgb(38, 67, 78), Color.rgb(156, 239, 220), Color.rgb(72, 133, 139))
+        Theme("Tropical Reef", Color.rgb(20, 43, 52), Color.rgb(38, 67, 78), Color.rgb(156, 239, 220), Color.rgb(72, 133, 139)),
+        Theme("Forest Emerald", Color.rgb(16, 48, 35), Color.rgb(29, 78, 55), Color.rgb(160, 242, 178), Color.rgb(61, 145, 91))
     )
 
     private data class Theme(val name: String, val background: Int, val panel: Int, val accent: Int, val border: Int)
@@ -103,7 +106,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("dead_man_draw_prefs", MODE_PRIVATE)
-        themeIndex = prefs.getInt("theme", 0).coerceIn(themes.indices)
+        themeIndex = prefs.getInt("theme", themes.lastIndex).coerceIn(themes.indices)
         reducedMotion = prefs.getBoolean("reduced_motion", false)
         soundEnabled = prefs.getBoolean("sound", false)
         hapticsEnabled = prefs.getBoolean("haptics", true)
@@ -411,6 +414,7 @@ class MainActivity : Activity() {
             }
             val imageId = resources.getIdentifier(drawableName, "drawable", packageName)
             if (imageId != 0) {
+                val pileFrame = FrameLayout(this)
                 val pileImage = ImageView(this).apply {
                     setImageResource(imageId)
                     scaleType = ImageView.ScaleType.FIT_CENTER
@@ -418,7 +422,37 @@ class MainActivity : Activity() {
                     contentDescription = description
                 }
                 if (isDrawPile) drawDeckImageView = pileImage else burnDeckImageView = pileImage
-                pile.addView(pileImage, LinearLayout.LayoutParams(dp(52), dp(78)))
+                pileFrame.addView(pileImage, FrameLayout.LayoutParams(dp(52), dp(78), Gravity.CENTER))
+
+                if (isDrawPile) {
+                    val reloadIndicator = TextView(this).apply {
+                        text = "↻"
+                        textSize = 24f * textScale
+                        typeface = Typeface.DEFAULT_BOLD
+                        gravity = Gravity.CENTER
+                        setTextColor(Color.rgb(16, 48, 35))
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(gold)
+                            setStroke(dp(1), Color.WHITE)
+                        }
+                        alpha = 0f
+                        scaleX = 0.72f
+                        scaleY = 0.72f
+                        elevation = dp(8).toFloat()
+                        contentDescription = "انیمیشن برداشتن کارت"
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }
+                    drawArrowIndicator = reloadIndicator
+                    pileFrame.addView(
+                        reloadIndicator,
+                        FrameLayout.LayoutParams(dp(34), dp(34), Gravity.TOP or Gravity.END).apply {
+                            topMargin = dp(2)
+                            marginEnd = dp(2)
+                        }
+                    )
+                }
+                pile.addView(pileFrame, LinearLayout.LayoutParams(dp(52), dp(78)))
             }
             if (isDrawPile) {
                 pile.setOnClickListener { onDrawDeckTapped(game) }
@@ -952,6 +986,43 @@ class MainActivity : Activity() {
             }.start()
     }
 
+    private fun animateDrawDeckControl(onFinished: () -> Unit) {
+        val indicator = drawArrowIndicator
+        if (indicator == null || reducedMotion) {
+            indicator?.animate()?.cancel()
+            indicator?.rotation = 0f
+            indicator?.alpha = 0f
+            animateDeckControl(drawDeckControl, onFinished)
+            return
+        }
+
+        indicator.animate().cancel()
+        indicator.rotation = 0f
+        indicator.alpha = 0f
+        indicator.scaleX = 0.72f
+        indicator.scaleY = 0.72f
+        indicator.animate()
+            .alpha(1f)
+            .scaleX(1.05f)
+            .scaleY(1.05f)
+            .setDuration(75)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                indicator.animate()
+                    .rotationBy(360f)
+                    .alpha(0f)
+                    .scaleX(0.72f)
+                    .scaleY(0.72f)
+                    .setDuration(175)
+                    .setInterpolator(DecelerateInterpolator())
+                    .withEndAction { indicator.rotation = 0f }
+                    .start()
+            }
+            .start()
+
+        animateDeckControl(drawDeckControl, onFinished)
+    }
+
     private fun onDrawDeckTapped(game: GameState) {
         if (!canCurrentPlayerAct(game) || drawAnimationRunning) return
         if (game.pendingEffect != null) {
@@ -970,7 +1041,7 @@ class MainActivity : Activity() {
             return
         }
         drawAnimationRunning = true
-        animateDeckControl(drawDeckControl) {
+        animateDrawDeckControl {
             drawAnimationRunning = false
             if (!canCurrentPlayerAct(game) || game.pendingEffect != null) return@animateDeckControl
             engine.draw(game)
