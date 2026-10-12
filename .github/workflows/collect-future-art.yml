@@ -1,0 +1,49 @@
+name: Collect Future Art Library
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/collect-future-art.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: future-art-library-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: github.ref == 'refs/heads/main'
+    name: Find and save freely licensed reference images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Search Wikimedia Commons and download images
+        run: python .github/scripts/collect_commons_art.py
+
+      - name: Commit the separate reference library
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add art-library/not-integrated
+          if git diff --cached --quiet; then
+            echo "The art library is already up to date."
+            exit 0
+          fi
+          git commit -m "Add freely licensed future art references"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
