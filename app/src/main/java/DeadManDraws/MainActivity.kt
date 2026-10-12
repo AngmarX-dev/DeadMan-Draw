@@ -1,5 +1,7 @@
 package DeadManDraws
 
+import com.angmarx.deadmandraw.R
+
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
