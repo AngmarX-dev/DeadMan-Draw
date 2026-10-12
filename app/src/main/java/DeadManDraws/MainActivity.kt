@@ -1043,7 +1043,7 @@ class MainActivity : Activity() {
         drawAnimationRunning = true
         animateDrawDeckControl {
             drawAnimationRunning = false
-            if (!canCurrentPlayerAct(game) || game.pendingEffect != null) return@animateDeckControl
+            if (!canCurrentPlayerAct(game) || game.pendingEffect != null) return@animateDrawDeckControl
             engine.draw(game)
             finishPlayerAction(game)
         }
