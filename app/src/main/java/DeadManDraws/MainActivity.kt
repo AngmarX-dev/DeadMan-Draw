@@ -202,6 +202,91 @@ class MainActivity : Activity() {
     }
 
     /**
+     * Adds cinematic color grading, edge shading, and a fine metallic frame without
+     * replacing the existing illustrated game artwork.
+     */
+    private fun cinematicBackground(): Drawable {
+        val artwork = resources.getDrawable(R.drawable.game_background, theme).mutate()
+        val atmosphere = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(
+                Color.argb(22, 6, 24, 15),
+                Color.argb(96, 3, 12, 9),
+                Color.argb(42, 15, 61, 35)
+            )
+        )
+        val vignette = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                Color.argb(74, 0, 0, 0),
+                Color.argb(8, 0, 0, 0),
+                Color.argb(100, 0, 0, 0)
+            )
+        )
+        val frame = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            cornerRadius = dp(12).toFloat()
+            setStroke(dp(1), Color.argb(92, Color.red(gold), Color.green(gold), Color.blue(gold)))
+        }
+        return LayerDrawable(arrayOf<Drawable>(artwork, atmosphere, vignette, frame)).apply {
+            setLayerInset(3, dp(4), dp(4), dp(4), dp(4))
+        }
+    }
+
+    /** A slim fantasy-metal divider used below screen titles and the in-game card guide. */
+    private fun ornamentalDivider(): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(18), 0, dp(18), dp(3))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        fun jewel(): TextView = TextView(this).apply {
+            text = "✦"
+            textSize = 11f * textScale
+            gravity = Gravity.CENTER
+            setTextColor(gold)
+            setShadowLayer(dp(5).toFloat(), 0f, 0f, mutedGold)
+        }
+        val line = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.TRANSPARENT, mutedGold, gold, mutedGold, Color.TRANSPARENT)
+            )
+            alpha = 0.95f
+        }
+        row.addView(jewel(), LinearLayout.LayoutParams(dp(18), dp(10)))
+        row.addView(line, LinearLayout.LayoutParams(0, dp(2), 1f))
+        row.addView(jewel(), LinearLayout.LayoutParams(dp(18), dp(10)))
+        return row
+    }
+
+    /** Glossy, metallic-edged card surface, with a brighter rim for protected cards. */
+    private fun ornateCardDrawable(type: CardType, protected: Boolean = false): Drawable {
+        val accent = if (protected) Color.rgb(160, 242, 178) else gold
+        val base = roundedDrawable(cardColor(type), accent, if (protected) 2 else 1)
+        val sheen = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(
+                Color.argb(43, 255, 255, 255),
+                Color.argb(8, 255, 255, 255),
+                Color.argb(4, 0, 0, 0)
+            )
+        ).apply {
+            cornerRadius = dp(19).toFloat()
+        }
+        val rim = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            cornerRadius = dp(19).toFloat()
+            setStroke(dp(1), Color.argb(104, Color.red(accent), Color.green(accent), Color.blue(accent)))
+        }
+        return LayerDrawable(arrayOf<Drawable>(base, sheen, rim)).apply {
+            setLayerInset(1, dp(3), dp(3), dp(6), dp(7))
+            setLayerInset(2, dp(2), dp(2), dp(5), dp(6))
+        }
+    }
+
+    /**
      * Layered, soft-edged surfaces inspired by claymorphism: offset lower shadow,
      * a gentle diagonal gradient, a light rim, and a subtle inset highlight.
      */
@@ -262,7 +347,7 @@ class MainActivity : Activity() {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             val sidePadding = if (resources.configuration.screenWidthDp >= 600) dp(56) else dp(20)
             setPadding(sidePadding, dp(18), sidePadding, dp(26))
-            background = resources.getDrawable(R.drawable.game_background, theme)
+            background = cinematicBackground()
         }
         scroll.addView(root, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -279,6 +364,7 @@ class MainActivity : Activity() {
             contentDescription = title
         }
         root.addView(heading)
+        root.addView(ornamentalDivider(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(12)))
         if (!reducedMotion) {
             root.alpha = 0f
             root.translationY = dp(14).toFloat()
@@ -301,7 +387,7 @@ class MainActivity : Activity() {
         val screenRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            background = resources.getDrawable(R.drawable.game_background, theme)
+            background = cinematicBackground()
             setPadding(dp(6), dp(3), dp(6), dp(5))
         }
         setContentView(screenRoot)
@@ -356,6 +442,9 @@ class MainActivity : Activity() {
         cardGuideBar.addView(cardGuideScroll, LinearLayout.LayoutParams(0, dp(44), 1f))
         screenRoot.addView(cardGuideBar, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(48)
+        ))
+        screenRoot.addView(ornamentalDivider(), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(10)
         ))
 
         val contentRow = LinearLayout(this).apply {
@@ -589,7 +678,7 @@ class MainActivity : Activity() {
         val tile = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            background = roundedDrawable(cardColor(card.type), gold, 1)
+            background = ornateCardDrawable(card.type)
             elevation = dp(5).toFloat()
             setPadding(dp(3), dp(3), dp(3), dp(3))
             contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value}"
@@ -1579,9 +1668,7 @@ class MainActivity : Activity() {
                 val tile = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
-                    background = roundedDrawable(cardColor(card.type),
-                        if (protected) Color.rgb(150, 242, 219) else gold,
-                        if (protected) 3 else 1)
+                    background = ornateCardDrawable(card.type, protected)
                     elevation = dp(7).toFloat()
                     contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
                     alpha = if (animateThisCard) 0.25f else 1f
