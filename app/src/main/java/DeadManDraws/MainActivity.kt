@@ -78,6 +78,7 @@ class MainActivity : Activity() {
     private var selectedPlayerCardsRow: LinearLayout? = null
     private var ownHandTitle: TextView? = null
     private var ownHandCardsRow: LinearLayout? = null
+    private var ownHandScrollView: HorizontalScrollView? = null
     private var drawDeckControl: LinearLayout? = null
     private var burnDeckControl: LinearLayout? = null
     private var drawDeckImageView: ImageView? = null
@@ -597,36 +598,77 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(88)
         ).apply { topMargin = dp(2) })
 
+        val handDockFrame = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+        val handBackdrop = ImageView(this).apply {
+            setImageResource(R.drawable.hand_cards_backdrop)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "قاب تزئینی کارت‌های ذخیره‌شده"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        handDockFrame.addView(handBackdrop, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+
         val handDock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = roundedDrawable(panelColor, gold, 1)
-            setPadding(dp(6), dp(3), dp(6), dp(4))
-            elevation = dp(4).toFloat()
+            setBackgroundColor(Color.TRANSPARENT)
+            setPadding(dp(4), dp(10), dp(4), dp(4))
+            clipChildren = false
+            clipToPadding = false
         }
         ownHandTitle = label("کارت‌های ذخیره‌شدهٔ تو", 13f).apply {
             setTextColor(gold)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(4), 0, dp(4), dp(2))
+            setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
         }
         handDock.addView(ownHandTitle)
         val ownHandScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
             layoutDirection = View.LAYOUT_DIRECTION_LTR
             contentDescription = "کارت‌های خود بازیکن که همیشه نمایش داده می‌شوند"
         }
+        ownHandScrollView = ownHandScroll
         ownHandCardsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_LTR
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER
+            clipChildren = false
         }
-        ownHandScroll.addView(ownHandCardsRow)
+        ownHandScroll.addView(ownHandCardsRow, HorizontalScrollView.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
         handDock.addView(ownHandScroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
-        mainColumn.addView(handDock, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(125)
+        handDockFrame.addView(handDock, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        mainColumn.addView(handDockFrame, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(160)
         ).apply { topMargin = dp(4) })
+        // Match the bitmap's 1720:434 aspect ratio so the seven gold card bays stay in place.
+        handDockFrame.post {
+            val frameWidth = handDockFrame.width
+            if (frameWidth > 0) {
+                val params = handDockFrame.layoutParams
+                val artworkHeight = (frameWidth.toFloat() * 434f / 1720f).toInt()
+                if (params.height != artworkHeight) {
+                    params.height = artworkHeight
+                    handDockFrame.layoutParams = params
+                }
+            }
+            ownHandScroll.post {
+                if (ownHandScroll.width > 0) refreshOwnHand(game)
+            }
+        }
 
         val sidebarWidth = if (resources.configuration.screenWidthDp >= 850) dp(245) else dp(198)
         val sidebar = LinearLayout(this).apply {
@@ -732,11 +774,27 @@ class MainActivity : Activity() {
         }
         val row = ownHandCardsRow ?: return
         row.removeAllViews()
+        val viewportWidth = ownHandScrollView?.width ?: 0
+        val sideInset = if (viewportWidth > 0) (viewportWidth * 0.083f).toInt() else dp(24)
+        val availableWidth = (viewportWidth - sideInset * 2).coerceAtLeast(dp(54 * 7))
+        val slotWidth = if (viewportWidth > 0) availableWidth / 7 else dp(64)
+        row.setPadding(sideInset, 0, sideInset, 0)
+
         if (player.bank.isEmpty()) {
-            row.addView(label("هنوز کارتی ذخیره نکرده‌ای؛ پس از جمع‌کردن گنج، کارت‌ها اینجا می‌مانند.", 12f))
+            row.addView(label("هنوز کارتی ذخیره نکرده‌ای؛ پس از جمع‌کردن گنج، کارت‌ها اینجا می‌مانند.", 12f).apply {
+                gravity = Gravity.CENTER
+                setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ))
         } else {
             player.bank.forEach { card ->
-                val tile = makeCardTile(card, compact = false)
+                // One slot per frame in the supplied 7-bay artwork. Smaller cards leave the gold frame visible.
+                val slot = FrameLayout(this).apply {
+                    clipChildren = false
+                    clipToPadding = false
+                }
+                val tile = makeCardTile(card, compact = true)
                 if (hookPending) {
                     val selected = card.id in selectedHookIds
                     tile.background = roundedDrawable(if (selected) mutedGold else cardColor(card.type),
@@ -745,7 +803,12 @@ class MainActivity : Activity() {
                     tile.isFocusable = true
                     tile.setOnClickListener { onBankCardTapped(game, player.id, card) }
                 }
-                row.addView(tile)
+                slot.addView(tile, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+                ))
+                row.addView(slot, LinearLayout.LayoutParams(
+                    slotWidth, ViewGroup.LayoutParams.MATCH_PARENT
+                ))
             }
         }
     }
