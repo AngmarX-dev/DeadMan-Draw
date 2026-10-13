@@ -642,7 +642,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             clipChildren = false
         }
-        ownHandScroll.addView(ownHandCardsRow, HorizontalScrollView.LayoutParams(
+        ownHandScroll.addView(ownHandCardsRow, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         handDock.addView(ownHandScroll, LinearLayout.LayoutParams(
