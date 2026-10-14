@@ -1347,7 +1347,12 @@ class MainActivity : Activity() {
         root.addView(profile, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(10) })
-        button("بازی جدید") { state = null; deleteSavedGame(); showSetup() }
+        button("بازی جدید") {
+            state = null
+            deleteSavedGame()
+            lastPassAndPlay = false
+            showSetup(groupMode = false)
+        }
         button("ادامهٔ بازی") {
             val saved = state ?: loadSavedGame()
             if (saved != null && !saved.finished) {
