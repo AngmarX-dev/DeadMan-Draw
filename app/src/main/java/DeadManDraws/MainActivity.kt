@@ -603,13 +603,12 @@ class MainActivity : Activity() {
             clipToPadding = false
             setBackgroundColor(Color.TRANSPARENT)
         }
-        val handBackdrop = ImageView(this).apply {
-            setImageResource(R.drawable.hand_cards_backdrop)
-            scaleType = ImageView.ScaleType.FIT_XY
-            contentDescription = "قاب تزئینی کارت‌های ذخیره‌شده"
+        // Semi-transparent black underlay lets the game's artwork remain visible through the frame.
+        val handShade = View(this).apply {
+            setBackgroundColor(Color.argb(112, 0, 0, 0))
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
-        handDockFrame.addView(handBackdrop, FrameLayout.LayoutParams(
+        handDockFrame.addView(handShade, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
 
@@ -649,6 +648,18 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         ))
         handDockFrame.addView(handDock, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        val deckFrameOverlay = ImageView(this).apply {
+            setImageResource(R.drawable.deck_frame)
+            scaleType = ImageView.ScaleType.FIT_XY
+            contentDescription = "قاب طلایی بالای ردیف کارت‌ها"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            isClickable = false
+            isFocusable = false
+        }
+        // Last child = highest visual layer; transparent regions reveal the card images underneath.
+        handDockFrame.addView(deckFrameOverlay, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         mainColumn.addView(handDockFrame, LinearLayout.LayoutParams(
@@ -721,6 +732,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = ornateCardDrawable(card.type)
+            foreground = resources.getDrawable(R.drawable.card_frame, theme)
             elevation = dp(5).toFloat()
             setPadding(dp(3), dp(3), dp(3), dp(3))
             contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value}"
@@ -881,6 +893,7 @@ class MainActivity : Activity() {
                         background = roundedDrawable(cardColor(card.type),
                             if (protected) Color.rgb(150, 242, 219) else gold,
                             if (protected) 3 else 1)
+                        foreground = resources.getDrawable(R.drawable.card_frame, theme)
                         elevation = dp(5).toFloat()
                         setPadding(dp(5), dp(5), dp(5), dp(5))
                         contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value.toPersianDigits()}"
@@ -1732,6 +1745,7 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
                     background = ornateCardDrawable(card.type, protected)
+                    foreground = resources.getDrawable(R.drawable.card_frame, theme)
                     elevation = dp(7).toFloat()
                     contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
                     alpha = if (animateThisCard) 0.25f else 1f
