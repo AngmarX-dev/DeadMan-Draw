@@ -604,7 +604,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             clipChildren = false
         }
-        ownHandScroll.addView(ownHandCardsRow, FrameLayout.LayoutParams(
+        ownHandScroll.addView(ownHandCardsRow, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         handDock.addView(ownHandScroll, LinearLayout.LayoutParams(
@@ -785,8 +785,9 @@ class MainActivity : Activity() {
                     tile.isFocusable = true
                     tile.setOnClickListener { onBankCardTapped(game, player.id, card) }
                 }
+                // Set explicit frame dimensions: WRAP_CONTENT here incorrectly shrinks the frame to its inner art.
                 slot.addView(tile, FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+                    dp(54), dp(76), Gravity.CENTER
                 ))
                 row.addView(slot, LinearLayout.LayoutParams(
                     slotWidth, ViewGroup.LayoutParams.MATCH_PARENT
