@@ -1675,7 +1675,7 @@ class MainActivity : Activity() {
             game.board.forEachIndexed { index, card ->
                 val protected = card.id in game.protectedCardIds
                 val animateThisCard = !reducedMotion && card.id !in previousBoardCardIds
-                val tile = framedCardSurface(card, dp(80), dp(112)).apply {
+                val tile = framedCardSurface(card, dp(54), dp(76)).apply {
                     contentDescription = "${card.type.displayName}${if (protected) ", protected from bust" else ""}"
                     alpha = if (animateThisCard) 0.25f else 1f
                     scaleX = if (animateThisCard) 0.78f else 1f
@@ -1684,9 +1684,9 @@ class MainActivity : Activity() {
                     rotationY = if (animateThisCard) 82f else 0f
                     rotation = 0f
                 }
-                strip.addView(tile, LinearLayout.LayoutParams(dp(80), dp(112)).apply {
-                    marginEnd = dp(8)
-                    bottomMargin = dp(8)
+                strip.addView(tile, LinearLayout.LayoutParams(dp(54), dp(76)).apply {
+                    marginEnd = dp(4)
+                    bottomMargin = dp(5)
                     topMargin = dp(3)
                 })
                 if (animateThisCard) {
