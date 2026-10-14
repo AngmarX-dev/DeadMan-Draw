@@ -76,7 +76,6 @@ class MainActivity : Activity() {
     private var playerListColumn: LinearLayout? = null
     private var selectedPlayerCardsTitle: TextView? = null
     private var selectedPlayerCardsRow: LinearLayout? = null
-    private var ownHandTitle: TextView? = null
     private var ownHandCardsRow: LinearLayout? = null
     private var ownHandScrollView: HorizontalScrollView? = null
     private var drawDeckControl: LinearLayout? = null
@@ -84,7 +83,7 @@ class MainActivity : Activity() {
     private var drawDeckImageView: ImageView? = null
     private var drawArrowIndicator: TextView? = null
     private var burnDeckImageView: ImageView? = null
-    private var collectTreasureButton: Button? = null
+    private var collectCrownHotspot: View? = null
     private var drawAnimationRunning = false
     private var lastRenderedBoardCardIds: Set<Int> = emptySet()
     private var landscapeScreenRoot: LinearLayout? = null
@@ -559,35 +558,6 @@ class MainActivity : Activity() {
         drawDeckControl = createDeckPile(
             "backcart", "برای برداشتن کارت لمس کنید", true
         )
-        collectTreasureButton = Button(this).apply {
-            text = "جمع‌آوری"
-            contentDescription = "جمع‌آوری گنج و پایان نوبت"
-            textSize = 14f * textScale
-            isAllCaps = false
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(25, 32, 34))
-            background = roundedDrawable(gold, mutedGold, 1)
-            elevation = dp(6).toFloat()
-            setPadding(dp(14), dp(6), dp(14), dp(6))
-            minHeight = dp(44)
-            minimumHeight = dp(44)
-            setOnClickListener {
-                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                if (!canCurrentPlayerAct(game) || game.pendingEffect != null || game.board.isEmpty()) return@setOnClickListener
-                isEnabled = false
-                animateDeckControl(drawDeckControl) {
-                    if (canCurrentPlayerAct(game) && game.pendingEffect == null && game.board.isNotEmpty()) {
-                        collectAfterConfirmation(game)
-                    }
-                }
-            }
-        }
-        deckRow.addView(collectTreasureButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(46)
-        ).apply {
-            marginStart = dp(8)
-            marginEnd = dp(8)
-        })
         burnDeckControl = createDeckPile(
             "backcartburn", "دستهٔ کارت‌های سوخته؛ برای نقشه لمس کنید", false
         )
@@ -616,17 +586,10 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setBackgroundColor(Color.TRANSPARENT)
-            setPadding(dp(4), dp(10), dp(4), dp(4))
+            setPadding(dp(4), dp(24), dp(4), dp(4))
             clipChildren = false
             clipToPadding = false
         }
-        ownHandTitle = label("کارت‌های ذخیره‌شدهٔ تو", 13f).apply {
-            setTextColor(gold)
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(4), 0, dp(4), dp(2))
-            setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
-        }
-        handDock.addView(ownHandTitle)
         val ownHandScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             isFillViewport = true
@@ -661,6 +624,28 @@ class MainActivity : Activity() {
         // Last child = highest visual layer; transparent regions reveal the card images underneath.
         handDockFrame.addView(deckFrameOverlay, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        collectCrownHotspot = View(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            contentDescription = "جمع‌آوری گنج از طریق تاج قاب کارت‌ها"
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                if (hapticsEnabled) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                if (!canCurrentPlayerAct(game) || game.pendingEffect != null || game.board.isEmpty()) {
+                    return@setOnClickListener
+                }
+                isEnabled = false
+                animateDeckControl(drawDeckControl) {
+                    if (canCurrentPlayerAct(game) && game.pendingEffect == null && game.board.isNotEmpty()) {
+                        collectAfterConfirmation(game)
+                    }
+                }
+            }
+        }
+        // Invisible hitbox aligns with the crown at the top center of Deck_frame.png.
+        handDockFrame.addView(collectCrownHotspot, FrameLayout.LayoutParams(
+            dp(88), dp(38), Gravity.TOP or Gravity.CENTER_HORIZONTAL
         ))
         mainColumn.addView(handDockFrame, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(160)
@@ -776,12 +761,7 @@ class MainActivity : Activity() {
         if (player == null) return
         val hookPending = game.pendingEffect?.cardType == CardType.HOOK &&
             game.pendingEffect?.playerIndex == player.id
-        ownHandTitle?.text = if (hookPending) {
-            "قلاب: کارت انتخاب کن • عنوان را نگه‌دار (${selectedHookIds.size})"
-        } else {
-            "کارت‌های ${player.name} • ${player.bank.size.toPersianDigits()}"
-        }
-        ownHandTitle?.setOnLongClickListener {
+        collectCrownHotspot?.setOnLongClickListener {
             if (hookPending) applySelectedHookCards(game) else false
         }
         val row = ownHandCardsRow ?: return
@@ -1117,8 +1097,9 @@ class MainActivity : Activity() {
         drawDeckControl?.alpha = if (canAct) 1f else 0.72f
         burnDeckControl?.alpha = if (canAct) 1f else 0.72f
         val canCollect = canAct && game.pendingEffect == null && game.board.isNotEmpty()
-        collectTreasureButton?.isEnabled = canCollect
-        collectTreasureButton?.alpha = if (canCollect) 1f else 0.55f
+        val hookPending = game.pendingEffect?.cardType == CardType.HOOK &&
+            game.pendingEffect?.playerIndex == game.currentPlayer
+        collectCrownHotspot?.isEnabled = canAct && (canCollect || hookPending)
     }
 
     private fun canCurrentPlayerAct(game: GameState): Boolean {
@@ -1198,7 +1179,7 @@ class MainActivity : Activity() {
         }
         if (game.drawDeck.isEmpty()) {
             game.message = if (game.board.isNotEmpty()) {
-                "دستهٔ کارت تمام شده؛ برای ذخیرهٔ گنج دکمهٔ جمع‌آوری را بزن."
+                "دستهٔ کارت تمام شده؛ برای جمع‌آوری گنج، تاج طلایی قاب کارت‌ها را لمس کن."
             } else {
                 "دستهٔ کارت تمام شده است."
             }
