@@ -712,45 +712,35 @@ class MainActivity : Activity() {
 
     private fun makeCardTile(card: CardDefinition, compact: Boolean): LinearLayout {
         val cardWidth = if (compact) dp(54) else dp(70)
-        val artHeight = if (compact) dp(38) else dp(56)
+        val cardHeight = if (compact) dp(76) else dp(98)
         val tile = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            background = ornateCardDrawable(card.type)
+            setBackgroundColor(Color.TRANSPARENT)
             foreground = resources.getDrawable(R.drawable.card_frame, theme)
-            elevation = dp(5).toFloat()
-            setPadding(dp(3), dp(3), dp(3), dp(3))
-            contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value}"
+            elevation = 0f
+            setPadding(0, 0, 0, 0)
+            contentDescription = cardNameFa(card.type)
+            clipChildren = true
+            clipToPadding = true
         }
         val imageId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
         if (imageId != 0) {
             tile.addView(ImageView(this).apply {
                 setImageResource(imageId)
-                scaleType = ImageView.ScaleType.FIT_CENTER
+                scaleType = ImageView.ScaleType.FIT_XY
                 contentDescription = cardNameFa(card.type)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, artHeight))
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ))
         } else {
             tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, artHeight
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
             ))
         }
-        tile.addView(TextView(this).apply {
-            text = cardNameFa(card.type)
-            textSize = if (compact) 8f * textScale else 10f * textScale
-            gravity = Gravity.CENTER
-            maxLines = 1
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(15)))
-        tile.addView(TextView(this).apply {
-            text = card.value.toPersianDigits()
-            textSize = if (compact) 8f * textScale else 9f * textScale
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(13)))
-        tile.layoutParams = LinearLayout.LayoutParams(cardWidth,
-            if (compact) dp(70) else dp(90)).apply { marginEnd = dp(4) }
-        // Keep already-banked cards still when the screen is rebuilt; only new table cards reveal-animate.
+        tile.layoutParams = LinearLayout.LayoutParams(cardWidth, cardHeight).apply {
+            marginEnd = dp(4)
+        }
         return tile
     }
 
@@ -773,12 +763,7 @@ class MainActivity : Activity() {
         row.setPadding(sideInset, 0, sideInset, 0)
 
         if (player.bank.isEmpty()) {
-            row.addView(label("هنوز کارتی ذخیره نکرده‌ای؛ پس از جمع‌کردن گنج، کارت‌ها اینجا می‌مانند.", 12f).apply {
-                gravity = Gravity.CENTER
-                setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
-            }, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-            ))
+            // Leave the illustrated seven-slot card tray image-only when the hand is empty.
         } else {
             player.bank.forEach { card ->
                 // One slot per frame in the supplied 7-bay artwork. Smaller cards leave the gold frame visible.
@@ -789,8 +774,7 @@ class MainActivity : Activity() {
                 val tile = makeCardTile(card, compact = true)
                 if (hookPending) {
                     val selected = card.id in selectedHookIds
-                    tile.background = roundedDrawable(if (selected) mutedGold else cardColor(card.type),
-                        if (selected) Color.rgb(114, 229, 198) else gold, if (selected) 3 else 1)
+                    tile.alpha = if (selected) 0.82f else 1f
                     tile.isClickable = true
                     tile.isFocusable = true
                     tile.setOnClickListener { onBankCardTapped(game, player.id, card) }
@@ -866,44 +850,31 @@ class MainActivity : Activity() {
                     setPadding(0, dp(4), 0, dp(4))
                 }
                 group.forEach { card ->
-                    val protected = card.id in game.protectedCardIds
                     val tile = LinearLayout(this).apply {
                         orientation = LinearLayout.VERTICAL
                         gravity = Gravity.CENTER
-                        background = roundedDrawable(cardColor(card.type),
-                            if (protected) Color.rgb(150, 242, 219) else gold,
-                            if (protected) 3 else 1)
+                        setBackgroundColor(Color.TRANSPARENT)
                         foreground = resources.getDrawable(R.drawable.card_frame, theme)
-                        elevation = dp(5).toFloat()
-                        setPadding(dp(5), dp(5), dp(5), dp(5))
-                        contentDescription = "${cardNameFa(card.type)}، ارزش ${card.value.toPersianDigits()}"
+                        elevation = 0f
+                        setPadding(0, 0, 0, 0)
+                        clipChildren = true
+                        clipToPadding = true
+                        contentDescription = cardNameFa(card.type)
                     }
                     val artId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
                     if (artId != 0) {
                         tile.addView(ImageView(this).apply {
                             setImageResource(artId)
-                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            scaleType = ImageView.ScaleType.FIT_XY
                             contentDescription = cardNameFa(card.type)
-                        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(100)))
+                        }, LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                        ))
                     } else {
                         tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, dp(100)
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
                         ))
                     }
-                    tile.addView(TextView(this).apply {
-                        text = cardNameFa(card.type)
-                        textSize = 13f * textScale
-                        gravity = Gravity.CENTER
-                        maxLines = 1
-                        typeface = Typeface.DEFAULT_BOLD
-                        setTextColor(Color.WHITE)
-                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
-                    tile.addView(TextView(this).apply {
-                        text = "${card.value.toPersianDigits()} امتیاز${if (protected) " • محافظت‌شده" else ""}"
-                        textSize = 11f * textScale
-                        gravity = Gravity.CENTER
-                        setTextColor(if (protected) Color.rgb(167, 255, 222) else Color.WHITE)
-                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
 
                     val effect = game.pendingEffect
                     val canSelect = effect != null && effect.playerIndex == game.currentPlayer && when (effect.cardType) {
@@ -919,7 +890,7 @@ class MainActivity : Activity() {
                             onBankCardTapped(game, player.id, card)
                         }
                     }
-                    row.addView(tile, LinearLayout.LayoutParams(dp(126), dp(158)).apply {
+                    row.addView(tile, LinearLayout.LayoutParams(dp(110), dp(154)).apply {
                         marginStart = dp(5)
                         marginEnd = dp(5)
                     })
@@ -1725,10 +1696,13 @@ class MainActivity : Activity() {
                 val tile = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
-                    background = ornateCardDrawable(card.type, protected)
+                    setBackgroundColor(Color.TRANSPARENT)
                     foreground = resources.getDrawable(R.drawable.card_frame, theme)
-                    elevation = dp(7).toFloat()
-                    contentDescription = "${card.type.displayName}, value ${card.value}${if (protected) ", protected from bust" else ""}"
+                    elevation = 0f
+                    setPadding(0, 0, 0, 0)
+                    clipChildren = true
+                    clipToPadding = true
+                    contentDescription = "${card.type.displayName}${if (protected) ", protected from bust" else ""}"
                     alpha = if (animateThisCard) 0.25f else 1f
                     scaleX = if (animateThisCard) 0.78f else 1f
                     scaleY = if (animateThisCard) 0.78f else 1f
@@ -1740,33 +1714,17 @@ class MainActivity : Activity() {
                 if (cardArtId != 0) {
                     tile.addView(ImageView(this).apply {
                         setImageResource(cardArtId)
-                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        scaleType = ImageView.ScaleType.FIT_XY
                         contentDescription = "${card.type.displayName} card artwork"
-                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(70)).apply {
-                        topMargin = dp(4)
-                    })
+                    }, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                    ))
                 } else {
                     tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(70)
-                    ).apply { topMargin = dp(4) })
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                    ))
                 }
-                tile.addView(TextView(this).apply {
-                    text = cardNameFa(card.type)
-                    textSize = 11f * textScale
-                    gravity = Gravity.CENTER
-                    typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
-                    setTextColor(Color.WHITE)
-                    contentDescription = card.type.displayName
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
-                tile.addView(TextView(this).apply {
-                    text = "${card.value.toPersianDigits()} امتیاز${if (protected) " • محافظت‌شده" else ""}"
-                    textSize = (if (protected) 9f else 11f) * textScale
-                    gravity = Gravity.CENTER
-                    typeface = Typeface.DEFAULT_BOLD
-                    setTextColor(if (protected) Color.rgb(167, 255, 222) else Color.WHITE)
-                    contentDescription = "Value ${card.value}${if (protected) ", shielded" else ""}"
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)))
-                strip.addView(tile, LinearLayout.LayoutParams(dp(112), dp(116)).apply {
+                strip.addView(tile, LinearLayout.LayoutParams(dp(80), dp(112)).apply {
                     marginEnd = dp(8)
                     bottomMargin = dp(8)
                     topMargin = dp(3)
