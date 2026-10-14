@@ -710,12 +710,12 @@ class MainActivity : Activity() {
         refreshPlayerSidebar(game)
     }
 
-    private fun makeCardTile(card: CardDefinition, compact: Boolean): LinearLayout {
-        val cardWidth = if (compact) dp(54) else dp(70)
-        val cardHeight = if (compact) dp(76) else dp(98)
-        val tile = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+    /**
+     * The frame occupies the full tile. Card artwork is inset so the gold card_frame
+     * remains visibly larger than the art on every card display.
+     */
+    private fun framedCardSurface(card: CardDefinition, frameWidth: Int, frameHeight: Int): FrameLayout {
+        val tile = FrameLayout(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             foreground = resources.getDrawable(R.drawable.card_frame, theme)
             elevation = 0f
@@ -724,24 +724,30 @@ class MainActivity : Activity() {
             clipChildren = true
             clipToPadding = true
         }
+        val artWidth = (frameWidth * 0.76f).toInt().coerceAtLeast(dp(1))
+        val artHeight = (frameHeight * 0.88f).toInt().coerceAtLeast(dp(1))
         val imageId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
-        if (imageId != 0) {
-            tile.addView(ImageView(this).apply {
+        val art: View = if (imageId != 0) {
+            ImageView(this).apply {
                 setImageResource(imageId)
                 scaleType = ImageView.ScaleType.FIT_XY
                 contentDescription = cardNameFa(card.type)
-            }, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-            ))
+            }
         } else {
-            tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-            ))
+            CardIllustrationView(this, card.type)
         }
-        tile.layoutParams = LinearLayout.LayoutParams(cardWidth, cardHeight).apply {
-            marginEnd = dp(4)
-        }
+        tile.addView(art, FrameLayout.LayoutParams(artWidth, artHeight, Gravity.CENTER))
         return tile
+    }
+
+    private fun makeCardTile(card: CardDefinition, compact: Boolean): FrameLayout {
+        val cardWidth = dp(if (compact) 54 else 70)
+        val cardHeight = dp(if (compact) 76 else 98)
+        return framedCardSurface(card, cardWidth, cardHeight).apply {
+            layoutParams = LinearLayout.LayoutParams(cardWidth, cardHeight).apply {
+                marginEnd = dp(4)
+            }
+        }
     }
 
     private fun refreshOwnHand(game: GameState) {
@@ -850,31 +856,7 @@ class MainActivity : Activity() {
                     setPadding(0, dp(4), 0, dp(4))
                 }
                 group.forEach { card ->
-                    val tile = LinearLayout(this).apply {
-                        orientation = LinearLayout.VERTICAL
-                        gravity = Gravity.CENTER
-                        setBackgroundColor(Color.TRANSPARENT)
-                        foreground = resources.getDrawable(R.drawable.card_frame, theme)
-                        elevation = 0f
-                        setPadding(0, 0, 0, 0)
-                        clipChildren = true
-                        clipToPadding = true
-                        contentDescription = cardNameFa(card.type)
-                    }
-                    val artId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
-                    if (artId != 0) {
-                        tile.addView(ImageView(this).apply {
-                            setImageResource(artId)
-                            scaleType = ImageView.ScaleType.FIT_XY
-                            contentDescription = cardNameFa(card.type)
-                        }, LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-                        ))
-                    } else {
-                        tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-                        ))
-                    }
+                    val tile = framedCardSurface(card, dp(110), dp(154))
 
                     val effect = game.pendingEffect
                     val canSelect = effect != null && effect.playerIndex == game.currentPlayer && when (effect.cardType) {
@@ -1693,15 +1675,7 @@ class MainActivity : Activity() {
             game.board.forEachIndexed { index, card ->
                 val protected = card.id in game.protectedCardIds
                 val animateThisCard = !reducedMotion && card.id !in previousBoardCardIds
-                val tile = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
-                    setBackgroundColor(Color.TRANSPARENT)
-                    foreground = resources.getDrawable(R.drawable.card_frame, theme)
-                    elevation = 0f
-                    setPadding(0, 0, 0, 0)
-                    clipChildren = true
-                    clipToPadding = true
+                val tile = framedCardSurface(card, dp(80), dp(112)).apply {
                     contentDescription = "${card.type.displayName}${if (protected) ", protected from bust" else ""}"
                     alpha = if (animateThisCard) 0.25f else 1f
                     scaleX = if (animateThisCard) 0.78f else 1f
@@ -1709,20 +1683,6 @@ class MainActivity : Activity() {
                     translationY = if (animateThisCard) dp(24).toFloat() else 0f
                     rotationY = if (animateThisCard) 82f else 0f
                     rotation = 0f
-                }
-                val cardArtId = resources.getIdentifier(cardDrawableName(card.type), "drawable", packageName)
-                if (cardArtId != 0) {
-                    tile.addView(ImageView(this).apply {
-                        setImageResource(cardArtId)
-                        scaleType = ImageView.ScaleType.FIT_XY
-                        contentDescription = "${card.type.displayName} card artwork"
-                    }, LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-                    ))
-                } else {
-                    tile.addView(CardIllustrationView(this, card.type), LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-                    ))
                 }
                 strip.addView(tile, LinearLayout.LayoutParams(dp(80), dp(112)).apply {
                     marginEnd = dp(8)
